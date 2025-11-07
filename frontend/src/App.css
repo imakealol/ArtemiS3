@@ -1,1 +1,22 @@
 @import "tailwindcss";
+
+h1 {
+  @apply text-4xl font-bold;
+}
+
+h2 {
+  @apply text-2xl font-bold;
+}
+
+/* apply as class instead of to all buttons for more freedom with button style */
+.button {
+  @apply px-2 py-1 border rounded-xl cursor-pointer hover:outline-1 active:bg-gray-200;
+}
+
+input {
+  @apply px-2 py-1 border border-gray-400 rounded-lg bg-gray-100;
+}
+
+.expandable {
+  @apply px-2 py-1 border border-gray-400 min-w-30 flex justify-between shadow;
+}
