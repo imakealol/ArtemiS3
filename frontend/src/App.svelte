@@ -8,7 +8,7 @@
 </script>
 
 <main>
-  <h1>Welcome to {name}</h1>
+  <h1 class="text-red-500">Welcome to {name}</h1>
   <p>Frontend is up. NGINX proxies this page and /api to FastAPI.</p>
   <button on:click={ping}>Test API</button>
 </main>
