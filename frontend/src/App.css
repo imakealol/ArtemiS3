@@ -14,9 +14,11 @@ h2 {
 }
 
 input {
-  @apply px-2 py-1 border border-gray-400 rounded-lg bg-gray-100;
+  @apply appearance-none px-2 py-1 border border-gray-400 rounded-lg
+         bg-gray-100 focus:outline-1 focus:outline-gray-600;
 }
 
 .expandable {
-  @apply px-2 py-1 border border-gray-400 min-w-30 flex justify-between shadow;
+  @apply px-2 py-1 border border-gray-400 min-w-20 flex items-center
+         justify-between gap-1 shadow active:bg-gray-200 cursor-pointer;
 }
