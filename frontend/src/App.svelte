@@ -1,5 +1,5 @@
 <script lang="ts">
-  import {Search as SearchIcon, ChevronDown } from "@lucide/svelte"
+  import {Search as SearchIcon, Menu as HamburgerMenu, Download as DownloadIcon, List as ListIcon, LayoutGrid} from "@lucide/svelte"
 
   let name = "ArtemiS3";
   async function ping() {
@@ -10,7 +10,76 @@
 
 import { onMount, onDestroy } from "svelte";
 
+// does not represent finalized json structure, simply for testing purposes
+interface SearchRequest {
+  keywords: string[]
+}
+interface FileInfo {
+  file_name: string;
+  file_type: string;
+  size: string;
+  date_uploaded: string; // ISO date string
+  data_path: string;     // S3 bucket/key path
+}
+interface SearchResult {
+  search_request: SearchRequest;
+  result_files: FileInfo[];
+}
+const testResults: SearchResult = {
+  search_request: {
+    keywords: [
+      "test",
+      "results"
+    ]
+  },
+  result_files: [
+    {
+      file_name: "test-results-1",
+      file_type: "png",
+      size: "46 KB",
+      date_uploaded: "2025-11-03",
+      data_path: "https://www.google.com",
+    },
+        {
+      file_name: "test-results-2",
+      file_type: "png",
+      size: "51 KB",
+      date_uploaded: "2025-11-04",
+      data_path: "https://www.google.com",
+    },  
+    {
+      file_name: "test-file-1",
+      file_type: "pdf",
+      size: "231 KB",
+      date_uploaded: "2025-11-01",
+      data_path: "https://www.google.com",
+    },
+    {
+      file_name: "test-file-2",
+      file_type: "txt",
+      size: "1.2 KB",
+      date_uploaded: "2025-11-02",
+      data_path: "https://www.google.com",
+    },
+    {
+      file_name: "results-doc",
+      file_type: "docx",
+      size: "23 KB",
+      date_uploaded: "2025-11-05",
+      data_path: "https://www.google.com",
+    },
+    {
+      file_name: "scan-results-1",
+      file_type: "csv",
+      size: "12 KB",
+      date_uploaded: "2025-11-06",
+      data_path: "https://www.google.com",
+    },
+  ]
+}
+
 let showSort = false;
+console.log(testResults)
 
 // sort state
 let sortField: "name" | "date" | "type" | "size" | null = null;
@@ -99,7 +168,7 @@ function UpIcon() {
           <h1>ArtemiS3</h1>
         </div>
         <div class="flex flex-col h-5/6 items-center justify-evenly">
-          <div class="flex flex-col items-center">
+          <div class="flex flex-col items-center pt-4">
             <div class="text-nowrap w-80 flex">
               <input class="w-full !p-2 !rounded-r-none shadow z-2" placeholder="Search for Files" />
               <span class="border border-l-white border-gray-400 flex items-center justify-center
@@ -109,7 +178,7 @@ function UpIcon() {
               </span>
             </div>
           </div>
-          <div class="w-5/6 h-7/10 flex flex-col items-center gap-2">
+          <div class="w-5/6 h-8/10 flex flex-col items-center gap-2">
             <div class="w-full flex justify-end relative">
               <div class="relative">
                 <button
@@ -119,13 +188,8 @@ function UpIcon() {
                   type="button"
                   aria-expanded={showSort}
                 >
-                  <!-- hamburger-style icon -->
-                  <div class="space-y-1">
-                    <span class="block w-4 h-0.5 bg-gray-700"></span>
-                    <span class="block w-4 h-0.5 bg-gray-700"></span>
-                    <span class="block w-4 h-0.5 bg-gray-700"></span>
-                  </div>
-                  <span class="ml-1">Sort</span>
+                  <HamburgerMenu />
+                  <span>Sort</span>
                 </button>
 
                 {#if showSort}
@@ -205,11 +269,55 @@ function UpIcon() {
                 {/if}
               </div>
             </div>
-            <div class="w-full h-full text-center border">
-              results
+            <div class="w-full h-full text-center border rounded">
+              <div class="w-full border-b p-2 flex items-center justify-between text-gray-900">
+                <span class="max-w-1/2 overflow-x-auto flex gap-2">
+                  <h3>Keywords: {testResults.search_request.keywords.join(", ")}</h3>
+                  <div class="border-r"></div>
+                  <h3>Filters: ...</h3>
+                </span>
+                <span class="flex items-center gap-2">
+                  <button class="button" disabled>Download Selected</button>
+                  <button class="button"><ListIcon /></button>
+                  <button class="button"><LayoutGrid /></button>
+                </span>
+              </div>
+                <div class="w-full flex flex-col">
+                  <div class="w-full pt-2 pb-1 px-6 flex justify-between items-center">
+                    <span class="w-full flex justify-between items-center">
+                      <span class="w-1/3 text-left flex">
+                        <span class="checkbox mr-3 mt-1"></span>
+                        <span>Name</span>
+                      </span>
+                      <span class="w-1/6 text-left">Date Uploaded</span>
+                      <span class="w-1/6 text-center">Type</span>
+                      <span class="w-1/6 text-left">Size</span>
+                    </span>
+                    <span class="w-6"></span>
+                  </div>
+                  <div class="flex flex-col gap-[1px] overflow-y-auto px-2 py-1">
+                    {#each testResults.result_files as file, index}
+                    
+                      <div class={`w-full outline-gray-600 rounded-sm py-1 px-4 flex justify-between items-center
+                                  hover:outline focus-within:outline focus-within:outline-blue-500 hover:z-2 focus-within:z-3
+                                  ${index % 2 === 0 ? "bg-gray-200 active:bg-gray-300" : "bg-white active:bg-gray-100"}`}>
+                        <label class="flex w-full justify-between items-center text-nowrap">
+                          <span class="w-1/3 text-left">
+                            <input type="checkbox" class="checkbox mr-2 mt-1" />
+                            {file.file_name}
+                          </span>
+                          <span class="w-1/6 text-left">{new Date(file.date_uploaded).toLocaleString()}</span>
+                          <span class="w-1/6 text-center">{file.file_type}</span>
+                          <span class="w-1/6 text-left">{file.size}</span>
+                        </label>
+                        <DownloadIcon class="text-gray-700 cursor-pointer" />
+                      </div>
+                    {/each}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
   </div>
 </main>
