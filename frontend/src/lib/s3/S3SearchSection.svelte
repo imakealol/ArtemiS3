@@ -2,6 +2,7 @@
   import { Search as SearchIcon } from "@lucide/svelte";
   import { searchS3 } from "../api/s3";
   import { type S3ObjectModel } from "../schemas/s3";
+  import FilterPanel from "../components/FilterPanel.svelte";
   import S3ResultsTable from "../s3/S3ResultsTable.svelte";
 
   export let className = "";
@@ -32,6 +33,25 @@
       s3Loading = false;
     }
   }
+
+  // This receives the payload from FilterPanel via prop callback
+  async function handleFilterApply(payload: {
+    selectedTypes: string[];
+    date: string;
+    condition: string;
+  }) {
+    try {
+      const res = await fetch("/api/filter", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      console.log("Response from backend (filter):", data);
+    } catch (err) {
+      console.error("Filter request failed:", err);
+    }
+  }
 </script>
 
 <section class={`border rounded p-4 bg-gray-50 ${className}`}>
@@ -43,6 +63,7 @@
     class="flex flex-wrap gap-3 items-end"
     on:submit|preventDefault={runS3Search}
   >
+    <FilterPanel onApply={handleFilterApply} />
     <div class="flex flex-col">
       <label for="s3Uri" class="text-sm font-medium mb-1">S3 URI</label>
       <input
