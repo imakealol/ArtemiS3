@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 from app.api.s3_routes import s3_router
+import meilisearch
 
 app = FastAPI(title="ArtemiS3 API")
 app.add_middleware(
@@ -37,3 +38,8 @@ def receive_filter(filter_request: FilterRequest):
     print("Condition:", filter_request.condition)
     # You can add logic here to actually filter your data
     return {"status": "ok", "received": filter_request.dict()}
+
+@app.get("/api/meilisearch/test")
+def test() -> dict:
+    client = meilisearch.Client("http://localhost:7700")
+    return {client.health()}

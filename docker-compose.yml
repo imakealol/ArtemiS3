@@ -6,6 +6,7 @@ services:
     depends_on:
       - frontend
       - backend
+      - meilisearch
     ports:
       - "80:80"
       - "443:443"
@@ -42,6 +43,22 @@ services:
     networks:
       - net
 
+  meilisearch:
+    image: getmeili/meilisearch:v1.16
+    container_name: meilisearch
+    ports:
+      - "7700:7700"
+    volumes:
+      - meilisearch:/meili_data
+    environment:
+      - MEILI_ENV=development
+      - MEILI_HTTP_ADDR=localhost:7700
+    networks:
+      - net
+
 networks:
   net:
     driver: bridge
+
+volumes:
+  meilisearch:
