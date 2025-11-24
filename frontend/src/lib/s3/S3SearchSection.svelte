@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Search as SearchIcon } from "@lucide/svelte";
   import { searchS3 } from "../api/s3";
-  import { type S3ObjectModel } from "../schemas/s3";
+  import { type S3ObjectModel, type S3SearchRequest } from "../schemas/s3";
   import FilterPanel from "../components/FilterPanel.svelte";
   import S3ResultsTable from "../s3/S3ResultsTable.svelte";
 
@@ -15,15 +15,43 @@
   let s3Error: string | null = null;
   let s3Results: S3ObjectModel[] = [];
 
+  type FilterState = {
+    suffixes?: string[];
+    minSize?: number;
+    maxSize?: number;
+    storgageClasses?: string[];
+    modifiedAfter?: string;
+    modifiedBefore?: string;
+  };
+  let s3Filters: FilterState = {};
+
+  type FilterPanelPayload = {
+    selectedTypes: string[];              // file types
+    minSize?: number;
+    maxSize?: number;
+    storgageClasses?: string[];
+    date?: string;                        // YYYY-MM-DD
+    condition?: "after" | "before" | "";
+  };
+
   async function runS3Search() {
     s3Loading = true;
     s3Error = null;
+
     try {
-      s3Results = await searchS3({
-        s3_uri: s3Uri,
-        contains: s3Contains || undefined,
-        limit: s3Limit
-      });
+      const request: S3SearchRequest = {
+        s3Uri: s3Uri, 
+        contains: s3Contains || undefined, 
+        limit: s3Limit, 
+        suffixes: s3Filters.suffixes, 
+        minSize: s3Filters.minSize, 
+        maxSize: s3Filters.maxSize, 
+        storageClasses: s3Filters.storgageClasses, 
+        modifiedAfter: s3Filters.modifiedAfter, 
+        modifiedBefore: s3Filters.modifiedBefore
+      };
+
+      s3Results = await searchS3(request);
       console.log("S3 search results:", s3Results);
     } catch (err) {
       s3Error = err instanceof Error ? err.message : "Unknown S3 error";
@@ -34,29 +62,44 @@
     }
   }
 
-  // This receives the payload from FilterPanel via prop callback
-  async function handleFilterApply(payload: {
-    selectedTypes: string[];
-    date: string;
-    condition: string;
-  }) {
-    try {
-      const res = await fetch("/api/filter", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      console.log("Response from backend (filter):", data);
-    } catch (err) {
-      console.error("Filter request failed:", err);
+  // calls on apply from FilterPanel
+  async function handleFilterApply(payload: FilterPanelPayload) {
+    const next: FilterState = {};
+
+    if (payload.selectedTypes && payload.selectedTypes.length > 0) {
+      next.suffixes = payload.selectedTypes;
+    }
+
+    if (typeof payload.minSize === "number") {
+      next.minSize = payload.minSize;
+    }
+
+    if (typeof payload.maxSize === "number") {
+      next.maxSize = payload.maxSize;
+    }
+
+    if (payload.storgageClasses && payload.storgageClasses.length > 0) {
+      next.storgageClasses = payload.storgageClasses;
+    }
+
+    if (payload.date && payload.condition == "after") {
+      next.modifiedAfter = payload.date;
+    } else if (payload.date && payload.condition == "before") {
+      next.modifiedBefore = payload.date;
+    }
+
+    s3Filters = next;
+
+    // rerun search when filters are applied
+    if (s3Uri) {
+      await runS3Search();
     }
   }
 </script>
 
 <section class={`border rounded p-4 bg-gray-50 ${className}`}>
   <h2 class="text-xl font-semibold mb-3">
-    S3 search endpoint test
+    Enter your search:
   </h2>
 
   <form
