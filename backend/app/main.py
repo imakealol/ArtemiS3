@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -13,6 +14,9 @@ app.add_middleware(
     allow_methods=["*"], 
     allow_headers=["*"]
 )
+
+meilisearch_url = os.getenv("MEILISEARCH_URL")
+client = meilisearch.Client(meilisearch_url)
 
 # routers for various API endpoint functionalities
 app.include_router(s3_router)
@@ -41,5 +45,5 @@ def receive_filter(filter_request: FilterRequest):
 
 @app.get("/api/meilisearch/test")
 def test() -> dict:
-    client = meilisearch.Client("http://localhost:7700")
-    return {client.health()}
+    health = client.health()
+    return {"status": health}

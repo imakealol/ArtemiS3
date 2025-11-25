@@ -40,6 +40,10 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
+    depends_on:
+      - meilisearch
+    environment:
+      - MEILISEARCH_URL=http://meilisearch:7700
     networks:
       - net
 
@@ -52,7 +56,7 @@ services:
       - meilisearch:/meili_data
     environment:
       - MEILI_ENV=development
-      - MEILI_HTTP_ADDR=localhost:7700
+      - MEILI_HTTP_ADDR=0.0.0.0:7700
     networks:
       - net
 
