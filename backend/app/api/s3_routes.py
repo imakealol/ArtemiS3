@@ -49,4 +49,4 @@ def refresh_index(s3_uri: str):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     
-    refresh_meili_index(bucket_name=bucket)
+    refresh_meili_index(bucket_name=bucket, prefix=prefix)
