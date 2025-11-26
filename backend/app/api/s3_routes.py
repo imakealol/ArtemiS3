@@ -4,6 +4,7 @@ from fastapi import APIRouter, Query, HTTPException
 from app.s3.search import iter_s3_objects
 from app.schemas.s3_models import S3ObjectModel
 from app.s3.utils import parse_s3_uri
+from app.s3.dep.index_refresh import refresh_meili_index
 
 s3_router = APIRouter(prefix="/api/s3", tags=["s3"])
 
@@ -39,3 +40,13 @@ def search_s3(s3_uri: str = Query(..., description="s3://bucket/prefix"),
         raise HTTPException(status_code=502, detail=str(e))
 
     return objects
+
+@s3_router.get("/refresh")
+def refresh_index(s3_uri: str):
+    try:
+        bucket, prefix = parse_s3_uri(s3_uri)
+    
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
+    refresh_meili_index(bucket_name=bucket)

@@ -16,7 +16,7 @@ app.add_middleware(
 )
 
 meilisearch_url = os.getenv("MEILISEARCH_URL")
-client = meilisearch.Client(meilisearch_url)
+meili_client = meilisearch.Client(meilisearch_url)
 
 # routers for various API endpoint functionalities
 app.include_router(s3_router)
@@ -45,5 +45,5 @@ def receive_filter(filter_request: FilterRequest):
 
 @app.get("/api/meilisearch/test")
 def test() -> dict:
-    health = client.health()
+    health = meili_client.health()
     return {"status": health}
