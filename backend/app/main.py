@@ -29,20 +29,6 @@ def health() -> dict:
 def test(name: str = "world") -> dict:
     return {"message": f"Hello, {name}!"}
 
-class FilterRequest(BaseModel):
-    selected_types: List[str]
-    date: Optional[str] = None
-    condition: Optional[str] = None
-
-@app.post("/api/filter")
-def receive_filter(filter_request: FilterRequest):
-    print("Received filter request:")
-    print("Selected types:", filter_request.selected_types)
-    print("Date:", filter_request.date)
-    print("Condition:", filter_request.condition)
-    # You can add logic here to actually filter your data
-    return {"status": "ok", "received": filter_request.dict()}
-
 @app.get("/api/meilisearch/test")
 def test() -> dict:
     health = meili_client.health()

@@ -6,7 +6,7 @@ import meilisearch
 from app.s3.search import iter_s3_objects, search_from_meili
 from app.schemas.s3_models import S3ObjectModel
 from app.s3.utils import parse_s3_uri
-from app.s3.dep.index_refresh import refresh_meili_index
+from app.s3.index_refresh import refresh_meili_index
 
 s3_router = APIRouter(prefix="/api/s3", tags=["s3"])
 
@@ -37,15 +37,15 @@ def search_s3(s3_uri: str = Query(..., description="s3://bucket/prefix"),
 
         try:
             objects = search_from_meili(bucket=bucket, 
-                                    prefix=prefix, 
-                                    contains=contains, 
-                                    suffixes=suffixes, 
-                                    min_size=min_size, 
-                                    max_size=max_size, 
-                                    storage_classes=storage_classes, 
-                                    modified_after=modified_after, 
-                                    modified_before=modified_before,
-                                    limit=limit)
+                                        prefix=prefix, 
+                                        contains=contains, 
+                                        suffixes=suffixes, 
+                                        min_size=min_size, 
+                                        max_size=max_size, 
+                                        storage_classes=storage_classes, 
+                                        modified_after=modified_after, 
+                                        modified_before=modified_before,
+                                        limit=limit)
         except Exception as e:
             raise HTTPException(status_code=502, detail=str(e))
 
