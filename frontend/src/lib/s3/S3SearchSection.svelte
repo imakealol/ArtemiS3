@@ -19,18 +19,18 @@
     suffixes?: string[];
     minSize?: number;
     maxSize?: number;
-    storgageClasses?: string[];
+    storageClasses?: string[];
     modifiedAfter?: string;
     modifiedBefore?: string;
   };
   let s3Filters: FilterState = {};
 
   type FilterPanelPayload = {
-    selectedTypes: string[];              // file types
+    selectedTypes: string[]; // file types
     minSize?: number;
     maxSize?: number;
-    storgageClasses?: string[];
-    date?: string;                        // YYYY-MM-DD
+    storageClasses?: string[];
+    date?: string; // YYYY-MM-DD
     condition?: "after" | "before" | "";
   };
 
@@ -40,15 +40,15 @@
 
     try {
       const request: S3SearchRequest = {
-        s3Uri: s3Uri, 
-        contains: s3Contains || undefined, 
-        limit: s3Limit, 
-        suffixes: s3Filters.suffixes, 
-        minSize: s3Filters.minSize, 
-        maxSize: s3Filters.maxSize, 
-        storageClasses: s3Filters.storgageClasses, 
-        modifiedAfter: s3Filters.modifiedAfter, 
-        modifiedBefore: s3Filters.modifiedBefore
+        s3Uri: s3Uri,
+        contains: s3Contains || undefined,
+        limit: s3Limit,
+        suffixes: s3Filters.suffixes,
+        minSize: s3Filters.minSize,
+        maxSize: s3Filters.maxSize,
+        storageClasses: s3Filters.storageClasses,
+        modifiedAfter: s3Filters.modifiedAfter,
+        modifiedBefore: s3Filters.modifiedBefore,
       };
 
       s3Results = await searchS3(request);
@@ -78,8 +78,8 @@
       next.maxSize = payload.maxSize;
     }
 
-    if (payload.storgageClasses && payload.storgageClasses.length > 0) {
-      next.storgageClasses = payload.storgageClasses;
+    if (payload.storageClasses && payload.storageClasses.length > 0) {
+      next.storageClasses = payload.storageClasses;
     }
 
     if (payload.date && payload.condition == "after") {
@@ -98,9 +98,7 @@
 </script>
 
 <section class={`border rounded p-4 bg-gray-50 ${className}`}>
-  <h2 class="text-xl font-semibold mb-3">
-    Enter your search:
-  </h2>
+  <h2 class="text-xl font-semibold mb-3">Enter your search:</h2>
 
   <form
     class="flex flex-wrap gap-3 items-end"

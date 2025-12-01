@@ -76,11 +76,11 @@ def get_current_s3_objects(bucket_name: str, prefix: Optional[str] = None):
     pager = s3.get_paginator("list_objects_v2")
     objects = []
     try:
-        for page in pager.paginate(Bucket=bucket_name, Prefix=prefix):
+        for page in pager.paginate(Bucket=bucket_name, Prefix=prefix if prefix is not None else ""):
             for obj in page.get("Contents", []):
                 objects.append(obj)
     except Exception as e:
-        print("Error fetching s3 objects", e)
+        print("Error fetching s3 objects:", e)
 
     return objects
 
@@ -142,9 +142,7 @@ def add_files_to_index(index: str, new_files: List):
         size = file["Size"]
         storage_class = file["StorageClass"]
         ctype = head.get("ContentType", "unknown")
-        last_modified = f"{file["LastModified"].isoformat()
-                            if isinstance(file["LastModified"], datetime)
-                            else file["LastModified"]}"
+        last_modified = int(file["LastModified"].timestamp())
         keywords = get_keywords_from_key(key)
         tags = [] # empty user tag array
         prefixList = key.split("/")

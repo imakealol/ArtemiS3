@@ -1,7 +1,9 @@
+import os
 from typing import Iterator, Optional, Dict, Any
 from datetime import datetime
 from botocore.client import BaseClient
 from botocore.exceptions import BotoCoreError, ClientError
+import meilisearch
 from app.s3.utils import get_public_client
 
 def iter_s3_objects(bucket: str, 
@@ -92,3 +94,60 @@ def filter_s3_objects(key: str,
         
     return True
     
+def search_from_meili(bucket: str, 
+                      prefix: str, 
+                      contains: Optional[str] = None, 
+                      limit: int = 10, 
+                      min_size: Optional[int] = None, 
+                      max_size: Optional[int] = None, 
+                      storage_classes: Optional[list[str]] = None, 
+                      modified_after: Optional[datetime] = None, 
+                      modified_before: Optional[datetime] = None, 
+                      suffixes: Optional[list[str]] = None) -> list[Dict[str, Any]]:
+    meilisearch_url = os.getenv("MEILISEARCH_URL")
+    meili_client = meilisearch.Client(meilisearch_url)
+
+    filter_arr = []
+    if prefix is not None and prefix != "":
+        prefix = prefix.split("/")[0]
+        filter_arr.append(f"Prefix={prefix}")
+
+    if min_size is not None:
+        filter_arr.append(f"Size>={min_size}")
+
+    if max_size is not None:
+        filter_arr.append(f"Size<={max_size}")
+
+    if storage_classes is not None and len(storage_classes) > 0:
+        storage_classes = [f"StorageClass={storage_class}" for storage_class in storage_classes]
+        filter_arr.append(" OR ".join(storage_classes))
+
+    if modified_after is not None:
+        timestamp = modified_after.timestamp()
+        filter_arr.append(f"LastModified>={timestamp}")
+    
+    if modified_before is not None:
+        timestamp = modified_before.timestamp()
+        filter_arr.append(f"LastModified<={timestamp}")
+
+    if suffixes is not None:
+        suffixes = [f"Keywords CONTAINS {suffix}" for suffix in suffixes]
+        filter_arr.append(" OR ".join(suffixes))
+
+    documents = meili_client.index(bucket).search(
+        contains if contains is not None else "",
+        {'filter': filter_arr,
+         'limit': limit})
+
+    objects = []
+    for document in documents["hits"]:
+        last_modified_out = datetime.fromtimestamp(int(document["LastModified"]))
+
+        objects.append({
+            "key": document["Key"], 
+            "size": document["Size"], 
+            "last_modified": last_modified_out, 
+            "storage_class": document["StorageClass"]
+        })
+
+    return objects

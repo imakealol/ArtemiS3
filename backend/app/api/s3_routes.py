@@ -1,7 +1,9 @@
+import os
 from typing import Optional, List, Sequence
 from datetime import datetime
 from fastapi import APIRouter, Query, HTTPException
-from app.s3.search import iter_s3_objects
+import meilisearch
+from app.s3.search import iter_s3_objects, search_from_meili
 from app.schemas.s3_models import S3ObjectModel
 from app.s3.utils import parse_s3_uri
 from app.s3.dep.index_refresh import refresh_meili_index
@@ -18,26 +20,51 @@ def search_s3(s3_uri: str = Query(..., description="s3://bucket/prefix"),
               modified_after: Optional[datetime] = Query(None),
               modified_before: Optional[datetime] = Query(None),
               limit: int = Query(10, description="Maximum number of results to return")):
+    meilisearch_url = os.getenv("MEILISEARCH_URL")
+    meili_client = meilisearch.Client(meilisearch_url)
+    
     try:
         bucket, prefix = parse_s3_uri(s3_uri)
     
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     
-    try: 
-        objects = list(iter_s3_objects(bucket=bucket, 
-                                       prefix=prefix, 
-                                       contains=contains, 
-                                       suffixes=suffixes, 
-                                       min_size=min_size, 
-                                       max_size=max_size, 
-                                       storage_classes=storage_classes, 
-                                       modified_after=modified_after, 
-                                       modified_before=modified_before,
-                                       limit=limit))
-    
-    except RuntimeError as e:
-        raise HTTPException(status_code=502, detail=str(e))
+    # Meilisearch
+    objects = []
+    try:
+        meili_client.get_index(bucket)
+        print("Index Exists, retrieving from index")
+
+        try:
+            objects = search_from_meili(bucket=bucket, 
+                                    prefix=prefix, 
+                                    contains=contains, 
+                                    suffixes=suffixes, 
+                                    min_size=min_size, 
+                                    max_size=max_size, 
+                                    storage_classes=storage_classes, 
+                                    modified_after=modified_after, 
+                                    modified_before=modified_before,
+                                    limit=limit)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=str(e))
+
+    except:
+        print("Index Doesn't Exist, running manual search")
+        try: 
+            objects = list(iter_s3_objects(bucket=bucket, 
+                                        prefix=prefix, 
+                                        contains=contains, 
+                                        suffixes=suffixes, 
+                                        min_size=min_size, 
+                                        max_size=max_size, 
+                                        storage_classes=storage_classes, 
+                                        modified_after=modified_after, 
+                                        modified_before=modified_before,
+                                        limit=limit))
+        
+        except RuntimeError as e:
+            raise HTTPException(status_code=502, detail=str(e))
 
     return objects
 
