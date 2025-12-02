@@ -1,8 +1,11 @@
 <script lang="ts">
   import { type S3ObjectModel } from "../schemas/s3";
+  import { Download } from "@lucide/svelte";
 
+  export let s3Uri: string = "";
   export let items: S3ObjectModel[] = [];
   export let searchedYet: boolean = false;
+  export let onDownload: (key: string, bucket: string) => void;
 </script>
 
 {#if !searchedYet}
@@ -23,6 +26,7 @@
         <th class="text-left p-2">Size bytes</th>
         <th class="text-left p-2">Last modified</th>
         <th class="text-left p-2">Storage class</th>
+        <th class="text-left p-2">Download</th>
       </tr>
     </thead>
     <tbody>
@@ -32,6 +36,15 @@
           <td class="p-2">{obj.size}</td>
           <td class="p-2">{obj.last_modified ?? "unknown"}</td>
           <td class="p-2">{obj.storage_class ?? "STANDARD"}</td>
+          <td class="p-2">
+            <button
+              on:click={() => onDownload(obj.key)}
+              title="Download"
+              class="text-blue-600 hover:text-blue-800 cursor-pointer"
+            >
+              <Download size={18} />
+            </button>
+          </td>
         </tr>
       {/each}
     </tbody>

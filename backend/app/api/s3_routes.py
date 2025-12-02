@@ -1,11 +1,13 @@
 import os
-from typing import Optional, List, Sequence
+from typing import Optional, List
 from datetime import datetime
 from fastapi import APIRouter, Query, HTTPException
+from fastapi.responses import StreamingResponse
 import meilisearch
+from botocore.exceptions import ClientError
 from app.s3.search import iter_s3_objects, search_from_meili
 from app.schemas.s3_models import S3ObjectModel
-from app.s3.utils import parse_s3_uri
+from app.s3.utils import parse_s3_uri, get_public_client
 from app.s3.index_refresh import refresh_meili_index
 
 s3_router = APIRouter(prefix="/api/s3", tags=["s3"])
@@ -77,3 +79,27 @@ def refresh_index(s3_uri: str):
         raise HTTPException(status_code=400, detail=str(e))
     
     refresh_meili_index(bucket_name=bucket, prefix=prefix)
+
+@s3_router.get("/download")
+def download_file(s3_uri: str = Query(..., description="s3://bucket/key")):
+    try:
+        bucket, key = parse_s3_uri(s3_uri)
+    
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    try:
+        s3_client = get_public_client()
+        obj = s3_client.get_object(Bucket=bucket, Key=key)
+
+    except ClientError:
+        raise HTTPException(status_code=404, detail="Object not found")
+
+    body = obj["Body"]
+    content_type = obj.get("ContentType", "application/octet-stream")
+    filename = key.split("/")[-1] or "file"
+
+    return StreamingResponse(body, media_type=content_type, 
+                             headers={
+                                 "Content-Disposition": f"attachment; filename={filename}"
+                             })

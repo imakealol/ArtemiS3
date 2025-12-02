@@ -54,7 +54,6 @@
 
       hasSearched = true;
       s3Results = await searchS3(request);
-      console.log("S3 search results:", s3Results);
     } catch (err) {
       s3Error = err instanceof Error ? err.message : "Unknown S3 error";
       s3Results = [];
@@ -96,6 +95,20 @@
     if (s3Uri) {
       await runS3Search();
     }
+  }
+
+  function getBucketFromUri(uri: string): string {
+    if (!uri.startsWith("s3://")) return "";
+    return uri.slice("s3://".length).split("/")[0];
+  }
+
+  async function handleDownload(key: string) {
+    const bucket = getBucketFromUri(s3Uri);
+    const fileUri = `s3://${bucket}/${key}`;
+    const url = `/api/s3/download?s3_uri=${encodeURIComponent(fileUri)}`;
+
+    // trigger browser download
+    window.location.href = url;
   }
 </script>
 
@@ -162,5 +175,5 @@
     <p class="mt-3 text-red-600">{s3Error}</p>
   {/if}
 
-  <S3ResultsTable items={s3Results} searchedYet={hasSearched} />
+  <S3ResultsTable s3Uri={s3Uri} items={s3Results} searchedYet={hasSearched} onDownload={handleDownload} />
 </section>
