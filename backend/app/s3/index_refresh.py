@@ -1,8 +1,11 @@
+from functools import partial
 import json
 import os
+import fitz
 from pathlib import Path
 from typing import List, Dict, Optional
-from datetime import datetime
+import time
+from io import BytesIO
 import sys
 import meilisearch
 import hashlib
@@ -14,9 +17,17 @@ from app.s3.refresh_status import (
     finish_refresh,
     fail_refresh
 )
+
+from mypy_boto3_s3 import S3Client
 from app.s3.utils import get_public_client, parse_s3_uri
 from app.schemas.meili_models import MeiliDocumentModel
+from multiprocessing import Pool
 
+
+# List of supported text file types for full-text indexing
+TEXT_CONTENT_TYPES = ["text/plain", "text/css", "text/csv", "text/html", "text/markdown", "application/json"]
+# Keyword parsing separation characters
+SEPARATION_CHARACTERS = ["/", ",", "_", "-", " ", ".", "\n", ":", "\\", "(", ")", "[", "]", "=", ";", "—", "*", "\""]
 
 def get_current_files_from_mock(bucket_name: str) -> List[Dict]:
 
@@ -157,44 +168,53 @@ def refresh_meili_index(bucket_name: str, prefix: Optional[str] = None, s3_uri: 
         raise
 
 
-def add_files_to_index(index: str, new_files: List, s3_uri: Optional[str] = None) -> None:
+def create_index(index: str, file, meili_client: meilisearch.Client, s3_uri: Optional[str] = None) -> None:
     s3 = get_public_client()
+    key = file["Key"]
+    hashed_key = get_doc_id(key)
+    head = s3.head_object(Bucket=index, Key=key)
+    size = file["Size"]
+    storage_class = file["StorageClass"]
+    ctype = head.get("ContentType", "unknown")
+    last_modified = int(file["LastModified"].timestamp())
+    tags = [] # empty user tag array
+    keywords = []
+    prefixList = key.split("/")
+    if len(prefixList) > 1: prefix = prefixList[0]
+    else: prefix = None
+
+    if ctype in TEXT_CONTENT_TYPES:
+        keywords = get_keywords_from_text(index, key)
+    elif ctype == "application/pdf":
+        keywords = get_keywords_from_pdf(index, key)
+    
+    if len(keywords) == 0: keywords = get_keywords_from_key(key)
+    
+    new_document: MeiliDocumentModel = {
+                    "ID": hashed_key,
+                    "Key": key,
+                    "LastModified": last_modified,
+                    "Size": size,
+                    "StorageClass": storage_class,
+                    "ContentType": ctype,
+                    "Keywords": keywords,
+                    "Tags": tags,
+                    "Prefix": prefix
+                    }
+    meili_client.index(index).add_documents([new_document])
+    if s3_uri is not None:
+        increment_processed(s3_uri, 1)
+
+def add_files_to_index(index: str, new_files: List, s3_uri: Optional[str] = None) -> None:
     meilisearch_url = os.getenv("MEILISEARCH_URL")
     meili_client = meilisearch.Client(meilisearch_url)
 
-    # TODO: look into parallelizing this loop to speed up indexing 
-    #  (most of the time cost is in meilisearch so doing this probably won't result in much speedup)
+    create_with_args = partial(create_index, index, meili_client=meili_client, s3_uri=s3_uri)
 
-    for file in new_files:
-        key = file["Key"]
-        hashed_key = get_doc_id(key)
-        head = s3.head_object(Bucket=index, Key=key)
-        size = file["Size"]
-        storage_class = file["StorageClass"]
-        ctype = head.get("ContentType", "unknown")
-        last_modified = int(file["LastModified"].timestamp())
-        keywords = get_keywords_from_key(key)
-        tags = [] # empty user tag array
-        prefixList = key.split("/")
-        if len(prefixList) > 1: prefix = prefixList[0]
-        else: prefix = None
-
-        # TODO: if file has text content, extract text and add to keywords array
-        
-        new_document: MeiliDocumentModel = {
-                        "ID": hashed_key,
-                        "Key": key,
-                        "LastModified": last_modified,
-                        "Size": size,
-                        "StorageClass": storage_class,
-                        "ContentType": ctype,
-                        "Keywords": keywords,
-                        "Tags": tags,
-                        "Prefix": prefix
-                        }
-        meili_client.index(index).add_documents([new_document])
-        if s3_uri is not None:
-            increment_processed(s3_uri, 1)
+    with Pool(5) as p:
+        p.map(create_with_args, new_files, 10)
+        p.close()
+        p.join()
 
 
 def remove_files_from_index(index: str, removed_keys: List[str], s3_uri: Optional[str] = None) -> None:
@@ -208,20 +228,48 @@ def remove_files_from_index(index: str, removed_keys: List[str], s3_uri: Optiona
             increment_processed(s3_uri, 1)
 
 
-# TODO: move meilisearch utility functions to their own file
-def get_doc_id(key: str):
-    hash_object = hashlib.sha256(key.encode())
-    hex_dig = hash_object.hexdigest()
-    return(f"{hex_dig}")
-
-
 def get_keywords_from_key(key: str):
-    replacements = str.maketrans({"/": ",", "_": ",", "-": ",", " ":",", ".": ","})
+    replacements = str.maketrans({char:"," for char in SEPARATION_CHARACTERS})
     key = key.translate(replacements)
     keywords = list(set(key.split(",")))
     if keywords.count("") > 0: keywords.remove("")
     return keywords
 
+def get_keywords_from_text(index: str, key: str):
+    s3 = get_public_client()
+    keywords = []
+    try:
+        response = s3.get_object(Bucket=index, Key=key)
+        text_content = response["Body"].read().decode("utf-8")
+        keywords = get_keywords_from_key(text_content)
+    except Exception as e: 
+        print(f"Error extracting text content from {key}", e)
+        keywords = get_keywords_from_key(key)
+    return keywords[:500] # only read up to 500 words to prevent index bloating on large text files
+
+def get_keywords_from_pdf(index: str, key: str):
+    s3 = get_public_client()
+    keywords = []
+    try:
+        response = s3.get_object(Bucket=index, Key=key)
+        pdf_stream = response["Body"].read()
+        pdf_document = fitz.open("application/pdf", pdf_stream)
+        for page in pdf_document:
+            text = page.get_text("text")
+            if text: keywords.extend(get_keywords_from_key(text))
+            if len(keywords) > 500: break
+
+    except Exception as e:
+        print(f"Error extracting text content from {key}: {e}")
+        keywords = get_keywords_from_key(key)
+    return keywords[:500]
+
+
+# TODO: move meilisearch utility functions to their own file
+def get_doc_id(key: str):
+    hash_object = hashlib.sha256(key.encode())
+    hex_dig = hash_object.hexdigest()
+    return(f"{hex_dig}")
 
 def get_all_indexes():
     meilisearch_url = os.getenv("MEILISEARCH_URL")
