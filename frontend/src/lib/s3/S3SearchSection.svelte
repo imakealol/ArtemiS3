@@ -7,7 +7,19 @@
 
   export let className = "";
 
-  let s3Uri = "";
+  // expand as more buckets are available (maybe we can make this dynamic?)
+  const s3UriOptions = [
+    "s3://asc-pds-services",
+    "s3://asc-pds-services/pigpen",
+    "s3://asc-astropedia",
+    "s3://asc-astropedia/Mars",
+    "custom",
+  ];
+
+  let selectedS3Bucket = s3UriOptions[0];
+  let customS3Uri = "";
+  let s3Uri = selectedS3Bucket;
+
   let s3Contains = "";
   let s3Limit = 10;
 
@@ -33,6 +45,20 @@
     date?: string; // YYYY-MM-DD
     condition?: "after" | "before" | "";
   };
+
+  function handleS3OptionChange(value: string) {
+    if (value === "custom") {
+      s3Uri = customS3Uri;
+    }
+    s3Uri = value;
+  }
+
+  function handleCustomS3UriInput(value: string) {
+    customS3Uri = value;
+    if (selectedS3Bucket === "custom") {
+      s3Uri = customS3Uri;
+    }
+  }
 
   let hasSearched = false;
   async function runS3Search() {
@@ -122,14 +148,31 @@
     <FilterPanel onApply={handleFilterApply} />
     <div class="flex flex-col">
       <label for="s3Uri" class="text-sm font-medium mb-1">S3 URI</label>
-      <input
+      <select
         id="s3Uri"
-        type="text"
-        bind:value={s3Uri}
+        bind:value={selectedS3Bucket}
         placeholder="s3://bucket/prefix"
         class="border rounded p-2 w-72"
+        on:change={(e) => handleS3OptionChange(e.currentTarget.value)}
         required
-      />
+      >
+        {#each s3UriOptions as option}
+          <option value={option}>
+            {option === "custom" ? "Custom..." : option}
+          </option>
+        {/each}
+      </select>
+
+      {#if selectedS3Bucket === "custom"}
+        <input
+          type="text"
+          placeholder="s3://bucket/prefix"
+          class="border rounded p-2 w-72 mt-2"
+          value={customS3Uri}
+          on:input={(e) => handleCustomS3UriInput(e.currentTarget.value)}
+          required
+        />
+      {/if}
     </div>
 
     <div class="flex flex-col">
@@ -175,5 +218,10 @@
     <p class="mt-3 text-red-600">{s3Error}</p>
   {/if}
 
-  <S3ResultsTable s3Uri={s3Uri} items={s3Results} searchedYet={hasSearched} onDownload={handleDownload} />
+  <S3ResultsTable
+    {s3Uri}
+    items={s3Results}
+    searchedYet={hasSearched}
+    onDownload={handleDownload}
+  />
 </section>
