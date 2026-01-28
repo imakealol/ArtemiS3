@@ -3,7 +3,8 @@
   import { searchS3 } from "../api/s3";
   import { type S3ObjectModel, type S3SearchRequest } from "../schemas/s3";
   import FilterPanel from "../components/FilterPanel.svelte";
-  import S3ResultsTable from "../s3/S3ResultsTable.svelte";
+  import S3ResultsTable from "../components/S3ResultsTable.svelte";
+  import S3IndexRefreshProgress from "./S3IndexRefreshProgress.svelte";
 
   export let className = "";
 
@@ -174,6 +175,8 @@
         />
       {/if}
     </div>
+
+    <S3IndexRefreshProgress {s3Uri} />
 
     <div class="flex flex-col">
       <label for="s3Contains" class="text-sm font-medium mb-1">
