@@ -28,22 +28,25 @@ app.include_router(s3_router)
 REFRESH_INTERVAL_SECONDS = int(os.getenv("REFRESH_INTERVAL_SECONDS", "3600"))
 REFRESH_BUCKETS = os.getenv(
     "REFRESH_BUCKETS", 
-    "s3://asc-pds-services, s3://asc-pds-services/pigpen, s3://asc-astropedia, s3://asc-astropedia/Mars"
+    "s3://asc-pds-services/pigpen,s3://asc-astropedia/Mars"#,s3://asc-pds-services,s3://asc-astropedia"
 )
 
 def _parse_refresh_targets():
     return [s.strip() for s in REFRESH_BUCKETS.split(",") if s.strip()]
 
 async def _index_refresh_loop():
+    await asyncio.sleep(2) # let app start
     print("Starting index refresh loop...")
     while True:
         for s3_uri in _parse_refresh_targets():
+            print(f"Trying to reindex: {s3_uri}")
             try:
                 bucket, prefix = parse_s3_uri(s3_uri)
-                refresh_meili_index(bucket, prefix, s3_uri=s3_uri)
+                await asyncio.to_thread(refresh_meili_index, bucket, prefix, s3_uri=s3_uri)
 
             except Exception as e:
                 print(f"Refresh failed: s3_uri={s3_uri}, error={str(e)}")
+        print(f"Waiting {REFRESH_INTERVAL_SECONDS} seconds...")
         await asyncio.sleep(REFRESH_INTERVAL_SECONDS)
 
 @app.on_event("startup")

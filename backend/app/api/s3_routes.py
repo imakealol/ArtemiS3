@@ -71,7 +71,7 @@ def search_s3(s3_uri: str = Query(..., description="s3://bucket/prefix"),
     return objects
 
 @s3_router.get("/refresh/status")
-def refresh_status(s3_uri: str):
+def refresh_status(s3_uri: str = Query(..., description="s3://bucket/prefix")):
     try:
         # only for validation
         parse_s3_uri(s3_uri)

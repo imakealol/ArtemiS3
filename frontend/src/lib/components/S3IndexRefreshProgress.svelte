@@ -27,7 +27,7 @@
   function startPolling() {
     stopPolling();
     pollOnce();
-    pollId = window.setInterval(pollOnce, 1500);
+    pollId = window.setInterval(pollOnce, 15000);
   }
 
   function stopPolling() {
@@ -37,7 +37,7 @@
     }
   }
 
-  if (s3Uri) {
+  $: if (s3Uri && s3Uri.startsWith("s3://")) {
     startPolling();
   } else {
     stopPolling();
@@ -50,11 +50,7 @@
   }
 
   // might be worth changing later...
-  if (
-    status.status === "done" ||
-    status.status === "error" ||
-    status.status === "idle"
-  ) {
+  $: if (status.status === "done" || status.status === "error") {
     stopPolling();
   }
 
@@ -62,7 +58,19 @@
 </script>
 
 {#if s3Uri}
-  {#if status.status === "running"}
+  {#if status.status === "listing"}
+    <div class="mt-2 w-full">
+      <div class="text-sm text-gray-600 mb-1">
+        Scanning S3 objects...
+        {#if status.listed !== null}
+          {status.listed} found
+        {/if}
+      </div>
+      <div class="h-2 bg-gray-200 rounded overflow-hidden">
+        <div class="h-2 bg-blue-600 animate-pulse w-full"></div>
+      </div>
+    </div>
+  {:else if status.status === "running"}
     <div class="mt-2 w-full">
       <div class="text-sm text-gray-600 mb-1">
         Refreshing index: {status.processed}/{status.total} ({status.percent}%)
@@ -70,13 +78,13 @@
       <div class="h-2 bg-gray-200 rounded">
         <div
           class="h-2 bg-blue-600 rounded"
-          style={`width: ${status.percent}`}
+          style={`width: ${status.percent}%`}
         ></div>
       </div>
     </div>
   {:else if status.status === "error"}
     <div class="mt-2 text-sm text-red-600">
-      Refresh error: {status.message || "Unknown error occurred"}
+      Refresh error: {error || "Unknown error occurred"}
     </div>
   {/if}
 {/if}

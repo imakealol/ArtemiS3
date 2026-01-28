@@ -50,8 +50,9 @@
   function handleS3OptionChange(value: string) {
     if (value === "custom") {
       s3Uri = customS3Uri;
+    } else {
+      s3Uri = value;
     }
-    s3Uri = value;
   }
 
   function handleCustomS3UriInput(value: string) {

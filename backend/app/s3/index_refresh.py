@@ -8,6 +8,8 @@ import meilisearch
 import hashlib
 from app.s3.refresh_status import (
     start_refresh,
+    set_status,
+    increment_listed,
     increment_processed,
     finish_refresh,
     fail_refresh
@@ -77,14 +79,16 @@ def refresh_search_index(bucket_name: str, cache_file: str = "index_cache.json")
         json.dump(current_files, f, indent=2)
 
 
-def get_current_s3_objects(bucket_name: str, prefix: Optional[str] = None):
+def get_current_s3_objects(bucket_name: str, prefix: Optional[str] = None, s3_uri: Optional[str] = None):
     s3 = get_public_client()
     pager = s3.get_paginator("list_objects_v2")
     objects = []
     try:
-        for page in pager.paginate(Bucket=bucket_name, Prefix=prefix if prefix is not None else ""):
-            for obj in page.get("Contents", []):
-                objects.append(obj)
+        for page in pager.paginate(Bucket=bucket_name, Prefix=prefix or ""):
+            contents = page.get("Contents", [])
+            objects.extend(contents)
+            if s3_uri is not None:
+                increment_listed(s3_uri, len(contents))
     except Exception as e:
         print("Error fetching s3 objects:", e)
 
@@ -92,14 +96,18 @@ def get_current_s3_objects(bucket_name: str, prefix: Optional[str] = None):
 
 
 def refresh_meili_index(bucket_name: str, prefix: Optional[str] = None, s3_uri: Optional[str] = None) -> None:
+    # start tracking at object listing
+    if s3_uri is not None:
+        start_refresh(s3_uri, total=0, status="listing")
+
     meilisearch_url = os.getenv("MEILISEARCH_URL")
     meili_client = meilisearch.Client(meilisearch_url)
-    current_files = get_current_s3_objects(bucket_name, prefix)
+    current_files = get_current_s3_objects(bucket_name, prefix, s3_uri=s3_uri)
 
-    index_objs = get_all_indices()
-    indices = {f["uid"] for f in index_objs}
+    index_objs = get_all_indexes()
+    indexes = {f["uid"] for f in index_objs}
 
-    if bucket_name in indices:
+    if bucket_name in indexes:
         prev_documents = get_all_documents(bucket_name, prefix)
         
         prev_keys = [getattr(f, "Key") for f in prev_documents]
@@ -117,16 +125,16 @@ def refresh_meili_index(bucket_name: str, prefix: Optional[str] = None, s3_uri: 
         removed_files = []
         total = len(new_files)
 
-    # start tracking refresh
+    # track actual refresh
     if s3_uri is not None:
-        start_refresh(s3_uri, total)
+        set_status(s3_uri, status="running", total=total, reset_processed=True)
 
     try:
-        if bucket_name in indices:
+        if bucket_name in indexes:
             if new_files:
-                add_files_to_index(bucket_name, new_files)
+                add_files_to_index(bucket_name, new_files, s3_uri=s3_uri)
             if removed_files:
-                remove_files_from_index(bucket_name, removed_files)
+                remove_files_from_index(bucket_name, removed_files, s3_uri=s3_uri)
 
         else:
             # index doesn't exist, create a new index
@@ -138,13 +146,15 @@ def refresh_meili_index(bucket_name: str, prefix: Optional[str] = None, s3_uri: 
                 "filterableAttributes": ["ContentType", "Size", "StorageClass", "LastModified", "Prefix"],
                 "sortableAttributes": ["Size", "LastModified"],
             })
-            add_files_to_index(bucket_name, current_files)
+            add_files_to_index(bucket_name, current_files, s3_uri=s3_uri)
 
-            if s3_uri is not None:
-                finish_refresh(s3_uri)
+        if s3_uri is not None:
+            finish_refresh(s3_uri)
 
     except Exception as e:
-        fail_refresh(s3_uri, str(e))
+        if s3_uri is not None:
+            fail_refresh(s3_uri, str(e))
+        raise
 
 
 def add_files_to_index(index: str, new_files: List, s3_uri: Optional[str] = None) -> None:
@@ -213,7 +223,7 @@ def get_keywords_from_key(key: str):
     return keywords
 
 
-def get_all_indices():
+def get_all_indexes():
     meilisearch_url = os.getenv("MEILISEARCH_URL")
     meili_client = meilisearch.Client(meilisearch_url)
 
@@ -222,7 +232,7 @@ def get_all_indices():
     total: int | None = None
     indexObjs = []
     while total is None or offset < total:
-        temp = meili_client.get_raw_indices({"limit": limit, "offset": offset})
+        temp = meili_client.get_raw_indexes({"limit": limit, "offset": offset})
         if total is None: total = temp["total"]
         offset += limit
         indexObjs.extend(temp["results"])
