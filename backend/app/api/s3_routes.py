@@ -8,7 +8,7 @@ from botocore.exceptions import ClientError
 from app.s3.search import iter_s3_objects, search_from_meili
 from app.schemas.s3_models import S3ObjectModel
 from app.s3.utils import parse_s3_uri, get_public_client, generate_preview_url
-from app.s3.index_refresh import refresh_meili_index
+from app.s3.index_refresh import get_status
 
 s3_router = APIRouter(prefix="/api/s3", tags=["s3"])
 
@@ -70,15 +70,16 @@ def search_s3(s3_uri: str = Query(..., description="s3://bucket/prefix"),
 
     return objects
 
-@s3_router.get("/refresh")
-def refresh_index(s3_uri: str):
+@s3_router.get("/refresh/status")
+def refresh_status(s3_uri: str = Query(..., description="s3://bucket/prefix")):
     try:
-        bucket, prefix = parse_s3_uri(s3_uri)
+        # only for validation
+        parse_s3_uri(s3_uri)
     
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     
-    refresh_meili_index(bucket_name=bucket, prefix=prefix)
+    return get_status(s3_uri)
 
 @s3_router.get("/download")
 def download_file(s3_uri: str = Query(..., description="s3://bucket/key")):

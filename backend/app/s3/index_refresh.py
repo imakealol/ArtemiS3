@@ -6,6 +6,14 @@ from datetime import datetime
 import sys
 import meilisearch
 import hashlib
+from app.s3.refresh_status import (
+    start_refresh,
+    set_status,
+    increment_listed,
+    increment_processed,
+    finish_refresh,
+    fail_refresh
+)
 from app.s3.utils import get_public_client, parse_s3_uri
 from app.schemas.meili_models import MeiliDocumentModel
 
@@ -71,27 +79,33 @@ def refresh_search_index(bucket_name: str, cache_file: str = "index_cache.json")
         json.dump(current_files, f, indent=2)
 
 
-def get_current_s3_objects(bucket_name: str, prefix: Optional[str] = None):
+def get_current_s3_objects(bucket_name: str, prefix: Optional[str] = None, s3_uri: Optional[str] = None):
     s3 = get_public_client()
     pager = s3.get_paginator("list_objects_v2")
     objects = []
     try:
-        for page in pager.paginate(Bucket=bucket_name, Prefix=prefix if prefix is not None else ""):
-            for obj in page.get("Contents", []):
-                objects.append(obj)
+        for page in pager.paginate(Bucket=bucket_name, Prefix=prefix or ""):
+            contents = page.get("Contents", [])
+            objects.extend(contents)
+            if s3_uri is not None:
+                increment_listed(s3_uri, len(contents))
     except Exception as e:
         print("Error fetching s3 objects:", e)
 
     return objects
 
 
-def refresh_meili_index(bucket_name: str, prefix: Optional[str] = None):
+def refresh_meili_index(bucket_name: str, prefix: Optional[str] = None, s3_uri: Optional[str] = None) -> None:
+    # start tracking at object listing
+    if s3_uri is not None:
+        start_refresh(s3_uri, total=0, status="listing")
+
     meilisearch_url = os.getenv("MEILISEARCH_URL")
     meili_client = meilisearch.Client(meilisearch_url)
-    current_files = get_current_s3_objects(bucket_name, prefix)
+    current_files = get_current_s3_objects(bucket_name, prefix, s3_uri=s3_uri)
 
-    indexObjs = get_all_indexes()
-    indexes = {f["uid"] for f in indexObjs}
+    index_objs = get_all_indexes()
+    indexes = {f["uid"] for f in index_objs}
 
     if bucket_name in indexes:
         prev_documents = get_all_documents(bucket_name, prefix)
@@ -103,31 +117,47 @@ def refresh_meili_index(bucket_name: str, prefix: Optional[str] = None):
         new_files = [f for f in current_files if f["Key"] not in prev_keys]
         removed_files = [f for f in prev_keys if f not in curr_keys]
 
-        if new_files:
-            print(f"Adding {len(new_files)} new files to the index \"{bucket_name}\"")
-            add_files_to_index(bucket_name, new_files)
-        else:
-            print("No new files found.")
+        # compute total work up front
+        total = len(new_files) + len(removed_files)
 
-        if removed_files:
-            print(f"Removing {len(removed_files)} from the index \"{bucket_name}\"")
-            remove_files_from_index(bucket_name, removed_files)
-        else:
-            print("No files removed.")
     else:
-        # index doesn't exist, create a new index
-        # object key includes invalid characters for primary key, create a hash of the key to use as the primary key instead
-        # NOTE: this means that in order to access a specific document by key you must hash it first using get_doc_id
-        meili_client.create_index(bucket_name, {"primaryKey": "ID"})
-        meili_client.index(bucket_name).update_settings({
-            "searchableAttributes": ["Tags", "Key", "Keywords"], # sorted in order of importance
-            "filterableAttributes": ["ContentType", "Size", "StorageClass", "LastModified", "Prefix"],
-            "sortableAttributes": ["Size", "LastModified"],
-        })
-        add_files_to_index(bucket_name, current_files)
+        new_files = current_files
+        removed_files = []
+        total = len(new_files)
+
+    # track actual refresh
+    if s3_uri is not None:
+        set_status(s3_uri, status="running", total=total, reset_processed=True)
+
+    try:
+        if bucket_name in indexes:
+            if new_files:
+                add_files_to_index(bucket_name, new_files, s3_uri=s3_uri)
+            if removed_files:
+                remove_files_from_index(bucket_name, removed_files, s3_uri=s3_uri)
+
+        else:
+            # index doesn't exist, create a new index
+            # object key includes invalid characters for primary key, create a hash of the key to use as the primary key instead
+            # NOTE: this means that in order to access a specific document by key you must hash it first using get_doc_id
+            meili_client.create_index(bucket_name, {"primaryKey": "ID"})
+            meili_client.index(bucket_name).update_settings({
+                "searchableAttributes": ["Tags", "Key", "Keywords"], # sorted in order of importance
+                "filterableAttributes": ["ContentType", "Size", "StorageClass", "LastModified", "Prefix"],
+                "sortableAttributes": ["Size", "LastModified"],
+            })
+            add_files_to_index(bucket_name, current_files, s3_uri=s3_uri)
+
+        if s3_uri is not None:
+            finish_refresh(s3_uri)
+
+    except Exception as e:
+        if s3_uri is not None:
+            fail_refresh(s3_uri, str(e))
+        raise
 
 
-def add_files_to_index(index: str, new_files: List):
+def add_files_to_index(index: str, new_files: List, s3_uri: Optional[str] = None) -> None:
     s3 = get_public_client()
     meilisearch_url = os.getenv("MEILISEARCH_URL")
     meili_client = meilisearch.Client(meilisearch_url)
@@ -163,15 +193,19 @@ def add_files_to_index(index: str, new_files: List):
                         "Prefix": prefix
                         }
         meili_client.index(index).add_documents([new_document])
+        if s3_uri is not None:
+            increment_processed(s3_uri, 1)
 
 
-def remove_files_from_index(index: str, removed_keys: List[str]):
+def remove_files_from_index(index: str, removed_keys: List[str], s3_uri: Optional[str] = None) -> None:
     meilisearch_url = os.getenv("MEILISEARCH_URL")
     meili_client = meilisearch.Client(meilisearch_url)
 
     for key in removed_keys:
         hashed_key = get_doc_id(key)
         meili_client.index(index).delete_document(hashed_key)
+        if s3_uri is not None:
+            increment_processed(s3_uri, 1)
 
 
 # TODO: move meilisearch utility functions to their own file
