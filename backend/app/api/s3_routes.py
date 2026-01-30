@@ -8,7 +8,7 @@ from botocore.exceptions import ClientError
 from app.s3.search import iter_s3_objects, search_from_meili
 from app.schemas.s3_models import S3ObjectModel
 from app.s3.utils import parse_s3_uri, get_public_client, generate_preview_url
-from app.s3.index_refresh import get_status
+from app.s3.refresh_status import get_status
 
 s3_router = APIRouter(prefix="/api/s3", tags=["s3"])
 
