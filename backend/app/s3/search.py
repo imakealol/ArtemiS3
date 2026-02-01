@@ -1,3 +1,4 @@
+import mimetypes
 import os
 from typing import Iterator, Optional, Dict, Any
 from datetime import datetime
@@ -5,12 +6,6 @@ from botocore.client import BaseClient
 from botocore.exceptions import BotoCoreError, ClientError
 import meilisearch
 from app.s3.utils import get_public_client
-
-# temp fix to "contains" problem
-SUFFIX_TO_CONTENT_TYPES = {"pdf": "application/pdf", 
-                           "png": "image/png", 
-                           "jpg": "image/jpg", 
-                           "zip": "application/zip"}
 
 def iter_s3_objects(bucket: str, 
                     prefix: str, 
@@ -137,7 +132,7 @@ def search_from_meili(bucket: str,
         filter_arr.append(f"LastModified<={timestamp}")
 
     if suffixes is not None:
-        content_types = {SUFFIX_TO_CONTENT_TYPES.get(suffix.lower()) for suffix in suffixes if suffix is not None}
+        content_types = {mimetypes.guess_type(f"f.{suffix}", False)[0] for suffix in suffixes if suffix is not None}
         
         if len(content_types) == 1:
             only_type = next(iter(content_types))
