@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 import json
 import os
@@ -211,10 +212,8 @@ def add_files_to_index(index: str, new_files: List, s3_uri: Optional[str] = None
 
     create_with_args = partial(create_index, index, meili_client=meili_client, s3_uri=s3_uri)
 
-    with Pool(5) as p:
-        p.map(create_with_args, new_files, 10)
-        p.close()
-        p.join()
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        executor.map(create_with_args, new_files)
 
 
 def remove_files_from_index(index: str, removed_keys: List[str], s3_uri: Optional[str] = None) -> None:
