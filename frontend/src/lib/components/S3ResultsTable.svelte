@@ -18,7 +18,16 @@
 
   let previewKey: string | null = null;
   let previewUrl: string | null = null;
+
   let page = 0;
+  $: maxPage = Math.ceil(items.length / PAGE_SIZE) - 1;
+  $: if (maxPage) checkMaxPage();
+
+  function checkMaxPage() {
+    if (page > maxPage) {
+      page = maxPage;
+    }
+  }
 
   async function handlePreview(key: string) {
     // Extract ONLY the bucket name (in case s3Uri is s3://my-bucket/folder/)
@@ -206,7 +215,7 @@
         <button
           class="page-button border-l"
           title="Go to the next page"
-          disabled={page >= Math.ceil(items.length / PAGE_SIZE) - 1}
+          disabled={page >= maxPage}
           on:click={() => page++}
         >
           <ChevronRight />
@@ -214,8 +223,8 @@
         <button
           class="page-button border-x rounded-r-xl"
           title="Go to the last page"
-          disabled={page >= Math.ceil(items.length / PAGE_SIZE) - 1}
-          on:click={() => (page = Math.ceil(items.length / PAGE_SIZE) - 1)}
+          disabled={page >= maxPage}
+          on:click={() => (page = maxPage)}
         >
           <ChevronLast />
         </button>
