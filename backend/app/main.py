@@ -28,7 +28,7 @@ app.include_router(s3_router)
 REFRESH_INTERVAL_SECONDS = int(os.getenv("REFRESH_INTERVAL_SECONDS", "3600"))
 REFRESH_BUCKETS = os.getenv(
     "REFRESH_BUCKETS", 
-    "s3://asc-pds-services,s3://asc-astropedia/Mars"#,s3://asc-pds-services/pigpen,s3://asc-astropedia"
+    "s3://asc-pds-services/pigpen,s3://asc-astropedia/Mars"#,s3://asc-pds-services,s3://asc-astropedia"
 )
 
 def _parse_refresh_targets():
