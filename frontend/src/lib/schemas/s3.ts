@@ -15,4 +15,6 @@ export type S3SearchRequest = {
   storageClasses?: string[];
   modifiedAfter?: string;
   modifiedBefore?: string;
+  sort_by?: "Key" | "Size" | "LastModified";
+  sort_direction?: "asc" | "desc";
 };
