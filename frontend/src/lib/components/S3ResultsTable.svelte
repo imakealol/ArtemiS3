@@ -6,6 +6,7 @@
     ChevronLeft,
     ChevronRight,
     Download,
+    Minus,
   } from "@lucide/svelte";
 
   export let s3Uri: string = "";
@@ -80,13 +81,13 @@
       <thead>
         <tr class="border-b bg-white">
           <th class="text-left p-2 cursor-pointer" on:click={() => onSort("Key")}>
-            Key {sort_by === "Key" ? (sort_direction === "asc" ? "▲" : "▼") : ""}
+            {sort_by === "Key" ? (sort_direction === "asc" ? "Key ▲" : "Key ▼") : "Key —"}
           </th>
           <th class="text-left p-2 cursor-pointer" on:click={() => onSort("Size")}>
-            Size {sort_by === "Size" ? (sort_direction === "asc" ? "▲" : "▼") : ""}
+            {sort_by === "Size" ? (sort_direction === "asc" ? "Size ▲" : "Size ▼") : "Size —"}
           </th>
           <th class="text-left p-2 cursor-pointer" on:click={() => onSort("LastModified")}>
-            Last modified {sort_by === "LastModified" ? (sort_direction === "asc" ? "▲" : "▼") : ""}
+            {sort_by === "LastModified" ? (sort_direction === "asc" ? "Last modified  ▲" : "Last modified  ▼") : "Last modified —"}
           </th>
 
           <th class="text-left p-2 min-w-[102px]">Storage class</th>
