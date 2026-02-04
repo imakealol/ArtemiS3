@@ -22,7 +22,7 @@
   let s3Uri = selectedS3Bucket;
 
   let s3Contains = "";
-  let s3Limit = 10;
+  let s3Limit = 500;
 
   let s3Loading = false;
   let s3Error: string | null = null;
@@ -140,7 +140,7 @@
   }
 </script>
 
-<section class={`border rounded p-4 bg-gray-50 ${className}`}>
+<section class={`border rounded p-4 bg-white ${className}`}>
   <h2 class="text-xl font-semibold mb-3">Enter your search:</h2>
 
   <form

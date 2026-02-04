@@ -29,3 +29,8 @@ input {
   @apply px-2 py-1 border border-gray-400 min-w-20 flex items-center
          justify-between gap-1 shadow active:bg-gray-200 cursor-pointer;
 }
+
+.page-button {
+  @apply cursor-pointer px-2 aspect-square border-y border-gray-300 active:bg-gray-200
+              disabled:cursor-default disabled:bg-gray-300 disabled:text-gray-500 hover:bg-gray-100
+}
