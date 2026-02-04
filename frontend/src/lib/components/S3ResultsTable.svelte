@@ -80,13 +80,13 @@
     <table class="mt-4 w-full border-collapse text-sm">
       <thead>
         <tr class="border-b bg-white">
-          <th class="text-left p-2 cursor-pointer" on:click={() => onSort("Key")}>
+          <th title="Sort Alphabetically" class="text-left p-2 cursor-pointer" on:click={() => onSort("Key")}>
             {sort_by === "Key" ? (sort_direction === "asc" ? "Key ▲" : "Key ▼") : "Key —"}
           </th>
-          <th class="text-left p-2 cursor-pointer" on:click={() => onSort("Size")}>
+          <th title="Sort by Biggest/Smallest" class="text-left p-2 cursor-pointer" on:click={() => onSort("Size")}>
             {sort_by === "Size" ? (sort_direction === "asc" ? "Size ▲" : "Size ▼") : "Size —"}
           </th>
-          <th class="text-left p-2 cursor-pointer" on:click={() => onSort("LastModified")}>
+          <th title="Sort by Most Recent/Least Recent" class="text-left p-2 cursor-pointer" on:click={() => onSort("LastModified")}>
             {sort_by === "LastModified" ? (sort_direction === "asc" ? "Last modified  ▲" : "Last modified  ▼") : "Last modified —"}
           </th>
 
