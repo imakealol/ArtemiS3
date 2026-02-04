@@ -35,6 +35,8 @@ export async function searchS3(params: S3SearchRequest): Promise<S3ObjectModel[]
   _addParam("storage_classes", params.storageClasses);
   _addParam("modified_after", params.modifiedAfter);
   _addParam("modified_before", params.modifiedBefore);
+  _addParam("sort_by", params.sort_by);
+  _addParam("sort_direction", params.sort_direction);
 
   const res = await fetch(`/api/s3/search?${queries.toString()}`);
   if (!res.ok) {
