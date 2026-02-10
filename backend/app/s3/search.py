@@ -1,3 +1,4 @@
+import mimetypes
 import os
 from typing import Iterator, Optional, Dict, Any
 from datetime import datetime
@@ -5,12 +6,6 @@ from botocore.client import BaseClient
 from botocore.exceptions import BotoCoreError, ClientError
 import meilisearch
 from app.s3.utils import get_public_client
-
-# temp fix to "contains" problem
-SUFFIX_TO_CONTENT_TYPES = {"pdf": "application/pdf", 
-                           "png": "image/png", 
-                           "jpg": "image/jpg", 
-                           "zip": "application/zip"}
 
 def iter_s3_objects(bucket: str, 
                     prefix: str, 
@@ -77,7 +72,8 @@ def filter_s3_objects(key: str,
                       storage_classes: Optional[list[str]] = None, 
                       modified_after: Optional[datetime] = None, 
                       modified_before: Optional[datetime] = None, 
-                      suffixes: Optional[list[str]] = None) -> bool:
+                      suffixes: Optional[list[str]] = None
+                      ) -> bool:
     if contains and contains not in key:
         return False
     
@@ -101,7 +97,7 @@ def filter_s3_objects(key: str,
     return True
     
 def search_from_meili(bucket: str, 
-                      prefix: str, 
+                      prefix: str,
                       contains: Optional[str] = None, 
                       limit: int = 10, 
                       min_size: Optional[int] = None, 
@@ -109,7 +105,9 @@ def search_from_meili(bucket: str,
                       storage_classes: Optional[list[str]] = None, 
                       modified_after: Optional[datetime] = None, 
                       modified_before: Optional[datetime] = None, 
-                      suffixes: Optional[list[str]] = None) -> list[Dict[str, Any]]:
+                      suffixes: Optional[list[str]] = None,
+                      sort_by: Optional[str] = None,
+                      sort_direction: str = "asc") -> list[Dict[str, Any]]:
     meilisearch_url = os.getenv("MEILISEARCH_URL")
     meili_client = meilisearch.Client(meilisearch_url)
 
@@ -137,7 +135,7 @@ def search_from_meili(bucket: str,
         filter_arr.append(f"LastModified<={timestamp}")
 
     if suffixes is not None:
-        content_types = {SUFFIX_TO_CONTENT_TYPES.get(suffix.lower()) for suffix in suffixes if suffix is not None}
+        content_types = {mimetypes.guess_type(f"f.{suffix}", False)[0] for suffix in suffixes if suffix is not None}
         
         if len(content_types) == 1:
             only_type = next(iter(content_types))
@@ -146,10 +144,20 @@ def search_from_meili(bucket: str,
             types_list = ", ".join(f"'{ctype}'" for ctype in sorted(content_types))
             filter_arr.append(f"ContentType IN [{types_list}]")
 
+    search_opts = {
+    "filter": filter_arr,
+    "limit": limit,
+    }
+
+    if sort_by:
+        if sort_by in {"Key", "Size", "LastModified"}:
+            search_opts["sort"] = [
+                f"{sort_by}:{sort_direction}"
+            ]
+
     documents = meili_client.index(bucket).search(
         contains if contains is not None else "",
-        {'filter': filter_arr,
-         'limit': limit})
+        search_opts)
 
     objects = []
     for document in documents["hits"]:

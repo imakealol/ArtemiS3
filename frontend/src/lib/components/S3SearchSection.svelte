@@ -3,17 +3,33 @@
   import { searchS3 } from "../api/s3";
   import { type S3ObjectModel, type S3SearchRequest } from "../schemas/s3";
   import FilterPanel from "../components/FilterPanel.svelte";
-  import S3ResultsTable from "../s3/S3ResultsTable.svelte";
+  import S3ResultsTable from "../components/S3ResultsTable.svelte";
+  import S3IndexRefreshProgress from "./S3IndexRefreshProgress.svelte";
 
   export let className = "";
 
-  let s3Uri = "";
+  // expand as more buckets are available (maybe we can make this dynamic?)
+  const s3UriOptions = [
+    "s3://asc-pds-services",
+    "s3://asc-pds-services/pigpen",
+    "s3://asc-astropedia",
+    "s3://asc-astropedia/Mars",
+    "custom",
+  ];
+
+  let selectedS3Bucket = s3UriOptions[0];
+  let customS3Uri = "";
+  let s3Uri = selectedS3Bucket;
+
   let s3Contains = "";
-  let s3Limit = 10;
+  let s3Limit = 500;
 
   let s3Loading = false;
   let s3Error: string | null = null;
   let s3Results: S3ObjectModel[] = [];
+
+  let sort_by: "Key" | "Size" | "LastModified" | undefined = undefined;
+  let sort_direction: "asc" | "desc" = "asc";
 
   type FilterState = {
     suffixes?: string[];
@@ -34,6 +50,21 @@
     condition?: "after" | "before" | "";
   };
 
+  function handleS3OptionChange(value: string) {
+    if (value === "custom") {
+      s3Uri = customS3Uri;
+    } else {
+      s3Uri = value;
+    }
+  }
+
+  function handleCustomS3UriInput(value: string) {
+    customS3Uri = value;
+    if (selectedS3Bucket === "custom") {
+      s3Uri = customS3Uri;
+    }
+  }
+
   let hasSearched = false;
   async function runS3Search() {
     s3Loading = true;
@@ -50,6 +81,8 @@
         storageClasses: s3Filters.storageClasses,
         modifiedAfter: s3Filters.modifiedAfter,
         modifiedBefore: s3Filters.modifiedBefore,
+        sort_by,
+        sort_direction,
       };
 
       hasSearched = true;
@@ -61,6 +94,21 @@
     } finally {
       s3Loading = false;
     }
+  }
+
+  function handleSort(column: "Key" | "Size" | "LastModified") {
+    if (!column) return;
+
+    // toggle if same column
+    if (sort_by === column) {
+      sort_direction = sort_direction === "asc" ? "desc" : "asc";
+    } else {
+      sort_by = column;
+      // default first click direction for all columns
+      sort_direction = "desc";
+    }
+
+    runS3Search();
   }
 
   // calls on apply from FilterPanel
@@ -112,7 +160,7 @@
   }
 </script>
 
-<section class={`border rounded p-4 bg-gray-50 ${className}`}>
+<section class={`border rounded p-4 bg-white ${className}`}>
   <h2 class="text-xl font-semibold mb-3">Enter your search:</h2>
 
   <form
@@ -122,15 +170,34 @@
     <FilterPanel onApply={handleFilterApply} />
     <div class="flex flex-col">
       <label for="s3Uri" class="text-sm font-medium mb-1">S3 URI</label>
-      <input
+      <select
         id="s3Uri"
-        type="text"
-        bind:value={s3Uri}
+        bind:value={selectedS3Bucket}
         placeholder="s3://bucket/prefix"
         class="border rounded p-2 w-72"
+        on:change={(e) => handleS3OptionChange(e.currentTarget.value)}
         required
-      />
+      >
+        {#each s3UriOptions as option}
+          <option value={option}>
+            {option === "custom" ? "Custom..." : option}
+          </option>
+        {/each}
+      </select>
+
+      {#if selectedS3Bucket === "custom"}
+        <input
+          type="text"
+          placeholder="s3://bucket/prefix"
+          class="border rounded p-2 w-72 mt-2"
+          value={customS3Uri}
+          on:input={(e) => handleCustomS3UriInput(e.currentTarget.value)}
+          required
+        />
+      {/if}
     </div>
+
+    <S3IndexRefreshProgress {s3Uri} />
 
     <div class="flex flex-col">
       <label for="s3Contains" class="text-sm font-medium mb-1">
@@ -175,5 +242,13 @@
     <p class="mt-3 text-red-600">{s3Error}</p>
   {/if}
 
-  <S3ResultsTable s3Uri={s3Uri} items={s3Results} searchedYet={hasSearched} onDownload={handleDownload} />
+  <S3ResultsTable
+    {s3Uri}
+    items={s3Results}
+    searchedYet={hasSearched}
+    onDownload={handleDownload}
+    onSort={handleSort}
+    {sort_by}
+    {sort_direction}
+  />
 </section>

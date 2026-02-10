@@ -1,4 +1,16 @@
-import { type S3ObjectModel, type S3SearchRequest } from "../schemas/s3";
+import type { S3ObjectModel, S3SearchRequest } from "../schemas/s3";
+import type { MeilisearchRefreshStatus } from "../schemas/meilisearch";
+
+export async function getRefreshStatus(s3Uri: string): Promise<MeilisearchRefreshStatus> {
+  const queries = new URLSearchParams();
+  queries.set("s3_uri", s3Uri);
+  const res = await fetch(`/api/s3/refresh/status?${queries.toString()}`);
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Refresh status failed: ${res.status} ${errorText}`);
+  }
+  return await res.json();
+}
 
 export async function searchS3(params: S3SearchRequest): Promise<S3ObjectModel[]> {
   const queries = new URLSearchParams();
@@ -23,6 +35,8 @@ export async function searchS3(params: S3SearchRequest): Promise<S3ObjectModel[]
   _addParam("storage_classes", params.storageClasses);
   _addParam("modified_after", params.modifiedAfter);
   _addParam("modified_before", params.modifiedBefore);
+  _addParam("sort_by", params.sort_by);
+  _addParam("sort_direction", params.sort_direction);
 
   const res = await fetch(`/api/s3/search?${queries.toString()}`);
   if (!res.ok) {

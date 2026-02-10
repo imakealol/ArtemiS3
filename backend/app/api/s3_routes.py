@@ -7,8 +7,8 @@ import meilisearch
 from botocore.exceptions import ClientError
 from app.s3.search import iter_s3_objects, search_from_meili
 from app.schemas.s3_models import S3ObjectModel
-from app.s3.utils import parse_s3_uri, get_public_client
-from app.s3.index_refresh import refresh_meili_index
+from app.s3.utils import parse_s3_uri, get_public_client, generate_preview_url
+from app.s3.refresh_status import get_status
 
 s3_router = APIRouter(prefix="/api/s3", tags=["s3"])
 
@@ -21,7 +21,9 @@ def search_s3(s3_uri: str = Query(..., description="s3://bucket/prefix"),
               storage_classes: Optional[List[str]] = Query(None, description="Allowed storage classes"),
               modified_after: Optional[datetime] = Query(None),
               modified_before: Optional[datetime] = Query(None),
-              limit: int = Query(10, description="Maximum number of results to return")):
+              limit: int = Query(10, description="Maximum number of results to return"),
+              sort_by: Optional[str] = Query(None, description = "Key | Size | LastModified"),
+              sort_direction: str = Query("asc", description = "asc | desc")):
     meilisearch_url = os.getenv("MEILISEARCH_URL")
     meili_client = meilisearch.Client(meilisearch_url)
     
@@ -31,6 +33,12 @@ def search_s3(s3_uri: str = Query(..., description="s3://bucket/prefix"),
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     
+    if sort_direction not in ("asc", "desc"):
+        sort_direction = "asc"
+
+    if sort_by not in {"Key", "Size", "LastModified"}:
+        sort_by = None
+
     # Meilisearch
     objects = []
     try:
@@ -47,7 +55,10 @@ def search_s3(s3_uri: str = Query(..., description="s3://bucket/prefix"),
                                         storage_classes=storage_classes, 
                                         modified_after=modified_after, 
                                         modified_before=modified_before,
-                                        limit=limit)
+                                        limit=limit,
+                                        sort_by=sort_by,
+                                        sort_direction=sort_direction
+                                        )
         except Exception as e:
             raise HTTPException(status_code=502, detail=str(e))
 
@@ -70,15 +81,16 @@ def search_s3(s3_uri: str = Query(..., description="s3://bucket/prefix"),
 
     return objects
 
-@s3_router.get("/refresh")
-def refresh_index(s3_uri: str):
+@s3_router.get("/refresh/status")
+def refresh_status(s3_uri: str = Query(..., description="s3://bucket/prefix")):
     try:
-        bucket, prefix = parse_s3_uri(s3_uri)
+        # only for validation
+        parse_s3_uri(s3_uri)
     
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     
-    refresh_meili_index(bucket_name=bucket, prefix=prefix)
+    return get_status(s3_uri)
 
 @s3_router.get("/download")
 def download_file(s3_uri: str = Query(..., description="s3://bucket/key")):
@@ -103,3 +115,11 @@ def download_file(s3_uri: str = Query(..., description="s3://bucket/key")):
                              headers={
                                  "Content-Disposition": f"attachment; filename={filename}"
                              })
+
+
+@s3_router.get("/preview")
+def s3_preview(bucket: str, key: str):
+    url = generate_preview_url(bucket, key)
+    if not url:
+        raise HTTPException(status_code=400, detail="Failed to generate URL")
+    return {"preview_url": url}

@@ -1,11 +1,11 @@
-export interface S3ObjectModel {
+export type S3ObjectModel = {
   key: string;
   size: number;
   last_modified?: string;
   storage_class?: string;
 };
 
-export interface S3SearchRequest {
+export type S3SearchRequest = {
   s3Uri: string;
   contains?: string;
   limit?: number;
@@ -15,4 +15,6 @@ export interface S3SearchRequest {
   storageClasses?: string[];
   modifiedAfter?: string;
   modifiedBefore?: string;
+  sort_by?: "Key" | "Size" | "LastModified";
+  sort_direction?: "asc" | "desc";
 };
