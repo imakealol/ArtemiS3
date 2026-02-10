@@ -143,6 +143,10 @@ def refresh_meili_index(bucket_name: str, prefix: Optional[str] = None, s3_uri: 
 
     try:
         if bucket_name in indexes:
+            meili_client.index(bucket_name).update_sortable_attributes(
+                ["Key", "Size", "LastModified"]
+            )
+
             if new_files:
                 add_files_to_index(bucket_name, new_files, s3_uri=s3_uri)
             if removed_files:
@@ -156,7 +160,7 @@ def refresh_meili_index(bucket_name: str, prefix: Optional[str] = None, s3_uri: 
             meili_client.index(bucket_name).update_settings({
                 "searchableAttributes": ["Tags", "Key", "Keywords"], # sorted in order of importance
                 "filterableAttributes": ["ContentType", "Size", "StorageClass", "LastModified", "Prefix"],
-                "sortableAttributes": ["Size", "LastModified"],
+                "sortableAttributes": ["Key", "Size", "LastModified"],
             })
             add_files_to_index(bucket_name, current_files, s3_uri=s3_uri)
 

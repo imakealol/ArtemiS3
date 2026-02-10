@@ -21,7 +21,9 @@ def search_s3(s3_uri: str = Query(..., description="s3://bucket/prefix"),
               storage_classes: Optional[List[str]] = Query(None, description="Allowed storage classes"),
               modified_after: Optional[datetime] = Query(None),
               modified_before: Optional[datetime] = Query(None),
-              limit: int = Query(10, description="Maximum number of results to return")):
+              limit: int = Query(10, description="Maximum number of results to return"),
+              sort_by: Optional[str] = Query(None, description = "Key | Size | LastModified"),
+              sort_direction: str = Query("asc", description = "asc | desc")):
     meilisearch_url = os.getenv("MEILISEARCH_URL")
     meili_client = meilisearch.Client(meilisearch_url)
     
@@ -31,6 +33,12 @@ def search_s3(s3_uri: str = Query(..., description="s3://bucket/prefix"),
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     
+    if sort_direction not in ("asc", "desc"):
+        sort_direction = "asc"
+
+    if sort_by not in {"Key", "Size", "LastModified"}:
+        sort_by = None
+
     # Meilisearch
     objects = []
     try:
@@ -47,7 +55,10 @@ def search_s3(s3_uri: str = Query(..., description="s3://bucket/prefix"),
                                         storage_classes=storage_classes, 
                                         modified_after=modified_after, 
                                         modified_before=modified_before,
-                                        limit=limit)
+                                        limit=limit,
+                                        sort_by=sort_by,
+                                        sort_direction=sort_direction
+                                        )
         except Exception as e:
             raise HTTPException(status_code=502, detail=str(e))
 

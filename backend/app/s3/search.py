@@ -72,7 +72,8 @@ def filter_s3_objects(key: str,
                       storage_classes: Optional[list[str]] = None, 
                       modified_after: Optional[datetime] = None, 
                       modified_before: Optional[datetime] = None, 
-                      suffixes: Optional[list[str]] = None) -> bool:
+                      suffixes: Optional[list[str]] = None
+                      ) -> bool:
     if contains and contains not in key:
         return False
     
@@ -96,7 +97,7 @@ def filter_s3_objects(key: str,
     return True
     
 def search_from_meili(bucket: str, 
-                      prefix: str, 
+                      prefix: str,
                       contains: Optional[str] = None, 
                       limit: int = 10, 
                       min_size: Optional[int] = None, 
@@ -104,7 +105,9 @@ def search_from_meili(bucket: str,
                       storage_classes: Optional[list[str]] = None, 
                       modified_after: Optional[datetime] = None, 
                       modified_before: Optional[datetime] = None, 
-                      suffixes: Optional[list[str]] = None) -> list[Dict[str, Any]]:
+                      suffixes: Optional[list[str]] = None,
+                      sort_by: Optional[str] = None,
+                      sort_direction: str = "asc") -> list[Dict[str, Any]]:
     meilisearch_url = os.getenv("MEILISEARCH_URL")
     meili_client = meilisearch.Client(meilisearch_url)
 
@@ -141,10 +144,20 @@ def search_from_meili(bucket: str,
             types_list = ", ".join(f"'{ctype}'" for ctype in sorted(content_types))
             filter_arr.append(f"ContentType IN [{types_list}]")
 
+    search_opts = {
+    "filter": filter_arr,
+    "limit": limit,
+    }
+
+    if sort_by:
+        if sort_by in {"Key", "Size", "LastModified"}:
+            search_opts["sort"] = [
+                f"{sort_by}:{sort_direction}"
+            ]
+
     documents = meili_client.index(bucket).search(
         contains if contains is not None else "",
-        {'filter': filter_arr,
-         'limit': limit})
+        search_opts)
 
     objects = []
     for document in documents["hits"]:

@@ -28,6 +28,9 @@
   let s3Error: string | null = null;
   let s3Results: S3ObjectModel[] = [];
 
+  let sort_by: "Key" | "Size" | "LastModified" | undefined = undefined;
+  let sort_direction: "asc" | "desc" = "asc";
+
   type FilterState = {
     suffixes?: string[];
     minSize?: number;
@@ -78,6 +81,8 @@
         storageClasses: s3Filters.storageClasses,
         modifiedAfter: s3Filters.modifiedAfter,
         modifiedBefore: s3Filters.modifiedBefore,
+        sort_by,
+        sort_direction,
       };
 
       hasSearched = true;
@@ -89,6 +94,21 @@
     } finally {
       s3Loading = false;
     }
+  }
+
+  function handleSort(column: "Key" | "Size" | "LastModified") {
+    if (!column) return;
+
+    // toggle if same column
+    if (sort_by === column) {
+      sort_direction = sort_direction === "asc" ? "desc" : "asc";
+    } else {
+      sort_by = column;
+      // default first click direction for all columns
+      sort_direction = "desc";
+    }
+
+    runS3Search();
   }
 
   // calls on apply from FilterPanel
@@ -227,5 +247,8 @@
     items={s3Results}
     searchedYet={hasSearched}
     onDownload={handleDownload}
+    onSort={handleSort}
+    {sort_by}
+    {sort_direction}
   />
 </section>

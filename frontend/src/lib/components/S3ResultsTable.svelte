@@ -6,12 +6,16 @@
     ChevronLeft,
     ChevronRight,
     Download,
+    Minus,
   } from "@lucide/svelte";
 
   export let s3Uri: string = "";
   export let items: S3ObjectModel[] = [];
   export let searchedYet: boolean = false;
   export let onDownload: (key: string, bucket: string) => void;
+  export let onSort: (column: "Key" | "Size" | "LastModified") => void;
+  export let sort_by: "Key" | "Size" | "LastModified" | undefined;
+  export let sort_direction: "asc" | "desc";
 
   const PREVIEWABLE_EXTENSIONS = [".pdf", ".png", ".jpg", ".jpeg", ".webp"];
   const PAGE_SIZE: number = 10;
@@ -20,7 +24,7 @@
   let previewUrl: string | null = null;
 
   let page = 0;
-  $: maxPage = Math.ceil(items.length / PAGE_SIZE) - 1;
+  $: maxPage = Math.max(Math.ceil(items.length / PAGE_SIZE) - 1, 0);
   $: if (maxPage) checkMaxPage();
 
   function checkMaxPage() {
@@ -76,9 +80,16 @@
     <table class="mt-4 w-full border-collapse text-sm">
       <thead>
         <tr class="border-b bg-white">
-          <th class="text-left p-2">Key</th>
-          <th class="text-left p-2">Size</th>
-          <th class="text-left p-2">Last modified</th>
+          <th title="Sort Alphabetically" class="text-left p-2 cursor-pointer" on:click={() => onSort("Key")}>
+            {sort_by === "Key" ? (sort_direction === "asc" ? "Key ▲" : "Key ▼") : "Key —"}
+          </th>
+          <th title="Sort by Biggest/Smallest" class="text-left p-2 cursor-pointer" on:click={() => onSort("Size")}>
+            {sort_by === "Size" ? (sort_direction === "asc" ? "Size ▲" : "Size ▼") : "Size —"}
+          </th>
+          <th title="Sort by Most Recent/Least Recent" class="text-left p-2 cursor-pointer" on:click={() => onSort("LastModified")}>
+            {sort_by === "LastModified" ? (sort_direction === "asc" ? "Last modified  ▲" : "Last modified  ▼") : "Last modified —"}
+          </th>
+
           <th class="text-left p-2 min-w-[102px]">Storage class</th>
           <th class="text-center p-2">Download</th>
           <th class="text-center p-2 min-w-[86px]">Preview</th>
