@@ -2,12 +2,10 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 import json
 import os
-import fitz
-from pathlib import Path
-from typing import List, Dict, Optional
-import time
-from io import BytesIO
 import sys
+from pathlib import Path
+from typing import List, Dict, Optional, Any
+import fitz
 import meilisearch
 import hashlib
 from app.s3.refresh_status import (
@@ -18,11 +16,16 @@ from app.s3.refresh_status import (
     finish_refresh,
     fail_refresh
 )
-
-from mypy_boto3_s3 import S3Client
-from app.s3.utils import get_public_client, parse_s3_uri
+from app.s3.utils import (
+    get_public_client,
+    normalize_s3_path,
+    escape_meili_filter_val,
+    key_parent_path,
+    key_filename,
+    parent_ancestors,
+    path_depth
+)
 from app.schemas.meili_models import MeiliDocumentModel
-from multiprocessing import Pool
 
 
 # List of supported text file types for full-text indexing
@@ -31,6 +34,24 @@ TEXT_CONTENT_TYPES = ["text/plain", "text/css", "text/csv",
 # Keyword parsing separation characters
 SEPARATION_CHARACTERS = ["/", ",", "_", "-", " ", ".", "\n",
                          ":", "\\", "(", ")", "[", "]", "=", ";", "—", "*", "\""]
+INDEX_SETTINGS = {
+    "searchableAttributes": ["Tags", "FileName", "Key", "Keywords"],
+    "filterableAttributes": [
+        "ContentType", "Size", "StorageClass", "LastModified",
+        "ParentPath", "Ancestors", "Depth"
+    ],
+    "sortableAttributes": ["Key", "Size", "LastModified"]
+}
+
+
+def config_index_settings(index_obj: meilisearch.Client) -> None:
+    index_obj.update_settings(INDEX_SETTINGS)
+
+
+def build_subtree_filter(path: str) -> str:
+    p = normalize_s3_path(path)
+    e = escape_meili_filter_val(p)
+    return f"(Ancestors = '{e}' OR ParentPath = '{e}')"
 
 
 def get_current_files_from_mock(bucket_name: str) -> List[Dict]:
@@ -145,9 +166,8 @@ def refresh_meili_index(bucket_name: str, prefix: Optional[str] = None, s3_uri: 
 
     try:
         if bucket_name in indexes:
-            meili_client.index(bucket_name).update_sortable_attributes(
-                ["Key", "Size", "LastModified"]
-            )
+            idx = meili_client.index(bucket_name)
+            config_index_settings(idx)
 
             if new_files:
                 add_files_to_index(bucket_name, new_files, s3_uri=s3_uri)
@@ -160,12 +180,8 @@ def refresh_meili_index(bucket_name: str, prefix: Optional[str] = None, s3_uri: 
             # object key includes invalid characters for primary key, create a hash of the key to use as the primary key instead
             # NOTE: this means that in order to access a specific document by key you must hash it first using get_doc_id
             meili_client.create_index(bucket_name, {"primaryKey": "ID"})
-            meili_client.index(bucket_name).update_settings({
-                # sorted in order of importance
-                "searchableAttributes": ["Tags", "Key", "Keywords"],
-                "filterableAttributes": ["ContentType", "Size", "StorageClass", "LastModified", "Prefix"],
-                "sortableAttributes": ["Key", "Size", "LastModified"],
-            })
+            idx = meili_client.index(bucket_name)
+            config_index_settings(idx)
             add_files_to_index(bucket_name, current_files, s3_uri=s3_uri)
 
         if s3_uri is not None:
@@ -179,39 +195,49 @@ def refresh_meili_index(bucket_name: str, prefix: Optional[str] = None, s3_uri: 
 
 def create_index(index: str, file, meili_client: meilisearch.Client, s3_uri: Optional[str] = None) -> None:
     s3 = get_public_client()
-    key = file["Key"]
-    hashed_key = get_doc_id(key)
-    head = s3.head_object(Bucket=index, Key=key)
+
+    # prefixing logic to handle folders
+    raw_key = file["Key"]
+    if raw_key.endswith("/"):
+        if s3_uri is not None:
+            increment_processed(s3_uri, 1)
+        return
+
+    norm_key = normalize_s3_path(raw_key)
+    hashed_key = get_doc_id(raw_key)
+    head = s3.head_object(Bucket=index, Key=raw_key)
     size = file["Size"]
-    storage_class = file["StorageClass"]
+    storage_class = file.get("StorageClass", "STANDARD")
     ctype = head.get("ContentType", "unknown")
     last_modified = int(file["LastModified"].timestamp())
+    file_name = key_filename(norm_key)
+    parent_path = key_parent_path(norm_key)
+    ancestors = parent_ancestors(parent_path)
+    depth = path_depth(parent_path)
     tags = []  # empty user tag array
     keywords = []
-    prefixList = key.split("/")
-    if len(prefixList) > 1:
-        prefix = prefixList[0]
-    else:
-        prefix = None
 
     if ctype in TEXT_CONTENT_TYPES:
-        keywords = get_keywords_from_text(index, key)
+        keywords = get_keywords_from_text(index, raw_key)
     elif ctype == "application/pdf":
-        keywords = get_keywords_from_pdf(index, key)
+        keywords = get_keywords_from_pdf(index, raw_key)
 
     if len(keywords) == 0:
-        keywords = get_keywords_from_key(key)
+        keywords = get_keywords_from_key(raw_key)
 
     new_document: MeiliDocumentModel = {
         "ID": hashed_key,
-        "Key": key,
+        "Key": raw_key,
+        "FileName": file_name,
+        "ParentPath": parent_path,
+        "Ancestors": ancestors,
+        "Depth": depth,
         "LastModified": last_modified,
         "Size": size,
         "StorageClass": storage_class,
         "ContentType": ctype,
         "Keywords": keywords,
-        "Tags": tags,
-        "Prefix": prefix
+        "Tags": tags
     }
     meili_client.index(index).add_documents([new_document])
     if s3_uri is not None:
@@ -324,7 +350,8 @@ def get_all_documents(index: str, prefix: Optional[str] = None):
             "offset": offset
         }
         if prefix is not None and prefix != "":
-            get_query["filter"] = f"Prefix={prefix}"
+            norm_prefix = normalize_s3_path(prefix)
+            get_query["filter"] = build_subtree_filter(norm_prefix)
 
         temp = meili_client.index(index).get_documents(get_query)
         if total is None:
