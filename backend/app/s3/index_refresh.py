@@ -158,6 +158,7 @@ def refresh_meili_index(bucket_name: str, prefix: Optional[str] = None, s3_uri: 
             # NOTE: this means that in order to access a specific document by key you must hash it first using get_doc_id
             meili_client.create_index(bucket_name, {"primaryKey": "ID"})
             meili_client.index(bucket_name).update_settings({
+                "rankingRules": ["sort", "words", "typo", "proximity", "attribute", "exactness"],                
                 "searchableAttributes": ["Tags", "Key", "Keywords"], # sorted in order of importance
                 "filterableAttributes": ["ContentType", "Size", "StorageClass", "LastModified", "Prefix"],
                 "sortableAttributes": ["Key", "Size", "LastModified"],
