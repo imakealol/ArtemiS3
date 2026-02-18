@@ -53,3 +53,36 @@ export async function searchS3(params: S3SearchRequest): Promise<S3ObjectModel[]
 
   return await res.json();
 }
+
+export async function searchS3Folders(params: S3FolderSearchRequest): Promise<S3FolderModel[]> {
+  const queries = new URLSearchParams();
+  queries.set("s3_uri", params.s3Uri);
+
+  addQueryParam(queries, "contains", params.contains);
+  addQueryParam(queries, "limit", params.limit);
+
+  const res = await fetch(`/api/s3/folders/search?${queries.toString()}`);
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`S3 folder search failed: ${res.status} ${errorText}`);
+  }
+
+  return await res.json();
+}
+
+export async function searchS3FolderChildren(params: S3FolderChildrenRequest): Promise<S3FolderChildrenResponse> {
+  const queries = new URLSearchParams();
+  queries.set("s3_uri", params.s3Uri);
+
+  addQueryParam(queries, "path", params.path);
+  addQueryParam(queries, "contains", params.contains);
+  addQueryParam(queries, "limit", params.limit);
+
+  const res = await fetch(`/api/s3/folders/children?${queries.toString()}`);
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`S3 folder children failed: ${res.status} ${errorText}`);
+  }
+
+  return await res.json();
+}
