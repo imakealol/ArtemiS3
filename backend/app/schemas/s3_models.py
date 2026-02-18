@@ -8,6 +8,7 @@ class S3ObjectModel(BaseModel):
     size: int
     last_modified: Optional[datetime] = None
     storage_class: Optional[str] = None
+    tags: Optional[List[str]] = None
 
 
 class S3FolderModel(BaseModel):

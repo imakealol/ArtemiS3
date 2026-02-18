@@ -236,12 +236,13 @@ def search_from_meili(bucket: str,
             int(document["LastModified"]))
 
         objects.append({
-            "key": document["Key"],
-            "size": document["Size"],
-            "last_modified": last_modified_out,
-            "storage_class": document["StorageClass"]
+            "key": document["Key"], 
+            "size": document["Size"], 
+            "last_modified": last_modified_out, 
+            "storage_class": document["StorageClass"],
+            "tags": document["Tags"]
         })
-
+    print(objects[0])
     return objects
 
 

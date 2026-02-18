@@ -223,3 +223,8 @@ def s3_preview(bucket: str, key: str):
     if not url:
         raise HTTPException(status_code=400, detail="Failed to generate URL")
     return {"preview_url": url}
+
+
+@s3_router.post("/tag")
+def edit_tags(bucket: str, key: str, tags: List[str]):
+    print(bucket, key, tags)

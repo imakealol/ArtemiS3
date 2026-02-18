@@ -3,6 +3,7 @@ export type S3ObjectModel = {
   size: number;
   lastModified?: string;
   storageClass?: string;
+  tags?: string[];
 };
 
 export type S3SearchRequest = {
