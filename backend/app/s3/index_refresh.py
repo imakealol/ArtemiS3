@@ -19,11 +19,11 @@ from app.s3.refresh_status import (
 from app.s3.utils import (
     get_public_client,
     normalize_s3_path,
-    escape_meili_filter_val,
     key_parent_path,
     key_filename,
     parent_ancestors,
-    path_depth
+    path_depth,
+    build_subtree_filter
 )
 from app.schemas.meili_models import MeiliDocumentModel
 
@@ -46,12 +46,6 @@ INDEX_SETTINGS = {
 
 def config_index_settings(index_obj: meilisearch.Client) -> None:
     index_obj.update_settings(INDEX_SETTINGS)
-
-
-def build_subtree_filter(path: str) -> str:
-    p = normalize_s3_path(path)
-    e = escape_meili_filter_val(p)
-    return f"(Ancestors = '{e}' OR ParentPath = '{e}')"
 
 
 def get_current_files_from_mock(bucket_name: str) -> List[Dict]:

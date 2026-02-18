@@ -84,3 +84,10 @@ def path_depth(path: str) -> int:
 def escape_meili_filter_val(val: str) -> str:
     """Correctly format Meilisearch filter value."""
     return val.replace("\\", "\\\\").replace("'", "\\'")
+
+
+def build_subtree_filter(path: str) -> str:
+    """Builds subtree filter command."""
+    p = normalize_s3_path(path)
+    e = escape_meili_filter_val(p)
+    return f"(Ancestors = '{e}' OR ParentPath = '{e}')"
