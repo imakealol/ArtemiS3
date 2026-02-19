@@ -147,7 +147,7 @@
               {#if canPreview(obj.key)}
                 <button
                   on:click={() => handlePreview(obj.key)}
-                  class="text-green-600 hover:text-green-800 font-bold"
+                  class="text-green-600 hover:text-green-800 font-bold cursor-pointer"
                 >
                   Preview
                 </button>
@@ -212,7 +212,7 @@
                       previewUrl = null;
                       previewKey = null;
                     }}
-                    class="mt-4 text-xs text-gray-400 hover:text-red-500 uppercase tracking-widest font-bold"
+                    class="mt-4 text-xs text-gray-400 hover:text-red-500 uppercase tracking-widest font-bold cursor-pointer"
                   >
                     [ Close Preview ]
                   </button>
@@ -231,7 +231,7 @@
       </span>
       <div class="flex">
         <button
-          class="page-button border-l rounded-l-xl"
+          class="page-button border-l rounded-l-xl cursor-pointer disabled:cursor-not-allowed"
           title="Go to the first page"
           disabled={page <= 0}
           on:click={() => (page = 0)}
@@ -239,7 +239,7 @@
           <ChevronFirst />
         </button>
         <button
-          class="page-button border-l"
+          class="page-button border-l cursor-pointer disabled:cursor-not-allowed"
           title="Go to the previous page"
           disabled={page <= 0}
           on:click={() => page--}
@@ -247,7 +247,7 @@
           <ChevronLeft />
         </button>
         <button
-          class="page-button border-l"
+          class="page-button border-l cursor-pointer disabled:cursor-not-allowed"
           title="Go to the next page"
           disabled={page >= maxPage}
           on:click={() => page++}
@@ -255,7 +255,7 @@
           <ChevronRight />
         </button>
         <button
-          class="page-button border-x rounded-r-xl"
+          class="page-button border-x rounded-r-xl cursor-pointer disabled:cursor-not-allowed"
           title="Go to the last page"
           disabled={page >= maxPage}
           on:click={() => (page = maxPage)}

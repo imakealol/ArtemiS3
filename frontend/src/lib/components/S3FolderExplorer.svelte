@@ -22,7 +22,7 @@
       <span class="text-sm font-medium">Path:</span>
       <button
         type="button"
-        class="text-blue-600 underline text-sm"
+        class="text-blue-600 underline text-sm cursor-pointer"
         on:click={() => onOpenBreadcrumb("")}
       >
         root
@@ -31,7 +31,7 @@
         <span class="text-gray-400">/</span>
         <button
           type="button"
-          class="text-blue-600 underline text-sm"
+          class="text-blue-600 underline text-sm cursor-pointer"
           on:click={() => onOpenBreadcrumb(crumb.path)}
         >
           {crumb.name}
@@ -39,7 +39,7 @@
       {/each}
       <button
         type="button"
-        class="ml-2 px-2 py-1 text-xs border rounded disabled:opacity-60"
+        class="ml-2 px-2 py-1 text-xs border rounded cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
         on:click={onNavigateUp}
         disabled={!activePath || loading}
       >
@@ -58,7 +58,7 @@
               <li>
                 <button
                   type="button"
-                  class={`w-full text-left text-sm px-2 py-1 rounded border ${
+                  class={`w-full text-left text-sm px-2 py-1 rounded border cursor-pointer ${
                     activePath === folder.path
                       ? "bg-white border-blue-300"
                       : "border-transparent hover:bg-white hover:border-gray-200"
@@ -77,16 +77,16 @@
       </div>
 
       <div>
-        <h3 class="text-sm font-semibold mb-2">Children</h3>
+        <h3 class="text-sm font-semibold mb-2">Subfolders</h3>
         {#if children.length === 0}
-          <p class="text-sm text-gray-500">No child folders.</p>
+          <p class="text-sm text-gray-500">No subfolders.</p>
         {:else}
           <ul class="space-y-1">
             {#each children as child}
               <li>
                 <button
                   type="button"
-                  class="w-full text-left text-sm px-2 py-1 rounded border border-transparent hover:bg-white hover:border-gray-200"
+                  class="w-full text-left text-sm px-2 py-1 rounded border border-transparent hover:bg-white hover:border-gray-200 cursor-pointer"
                   on:click={() => onOpenFolder(child.path)}
                 >
                   <span class="font-mono">{child.name}</span>

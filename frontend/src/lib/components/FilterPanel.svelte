@@ -45,7 +45,7 @@
   <button 
     type="button"
     on:click={toggleDropdown}
-    class="border p-2 rounded bg-gray-100 hover:bg-gray-200 flex items-center gap-2"  
+    class="border p-2 rounded bg-gray-100 hover:bg-gray-200 flex items-center gap-2 cursor-pointer"  
   >
     <ListIcon class="w-4 h-4" />
     <span>Filter</span>
@@ -164,7 +164,7 @@
       <button
         type="button"
         on:click={sendFilter}
-        class="mt-2 bg-blue-500 text-white p-2 rounded w-full"
+        class="mt-2 bg-blue-500 text-white p-2 rounded w-full cursor-pointer"
       >
         Apply filters
       </button>

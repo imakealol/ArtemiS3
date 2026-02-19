@@ -278,7 +278,7 @@
       <div class="inline-flex border rounded overflow-hidden">
         <button
           type="button"
-          class={`px-3 py-2 text-sm ${
+          class={`px-3 py-2 text-sm cursor-pointer ${
             viewMode === "file"
               ? "bg-blue-600 text-white"
               : "bg-white text-gray-700"
@@ -289,7 +289,7 @@
         </button>
         <button
           type="button"
-          class={`px-3 py-2 text-sm border-l ${
+          class={`px-3 py-2 text-sm border-l cursor-pointer ${
             viewMode === "folder"
               ? "bg-blue-600 text-white"
               : "bg-white text-gray-700"
@@ -363,7 +363,7 @@
 
     <button
       type="submit"
-      class="flex items-center gap-2 bg-blue-600 text-white px-3 py-2 rounded disabled:opacity-60"
+      class="flex items-center gap-2 bg-blue-600 text-white px-3 py-2 rounded cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
       disabled={s3Loading}
     >
       <SearchIcon class="w-4 h-4" />
