@@ -56,7 +56,7 @@ def search_s3(s3_uri: str = Query(..., description="s3://bucket/prefix"),
     if sort_direction not in ("asc", "desc"):
         sort_direction = "asc"
 
-    if sort_by not in {"Key", "Size", "LastModified"}:
+    if sort_by not in ("Key", "Size", "LastModified"):
         sort_by = None
 
     # Meilisearch
@@ -140,7 +140,10 @@ def list_s3_folder_children(s3_uri: str = Query(..., description="s3://bucket/pr
                                 None, description="Folder path within bucket"),
                             contains: Optional[str] = Query(
                                 None, description="Optional folder relevance query"),
-                            limit: int = Query(100, ge=1, le=500)):
+                            limit: int = Query(100, ge=1, le=500),
+                            sort_by: Optional[str] = Query(
+                                None, description="Key | Size | LastModified"),
+                            sort_direction: str = Query("asc", description="asc | desc")):
     meili_url = os.getenv("MEILISEARCH_URL")
     meili_client = meilisearch.Client(meili_url)
 
@@ -148,6 +151,12 @@ def list_s3_folder_children(s3_uri: str = Query(..., description="s3://bucket/pr
         bucket, prefix = parse_s3_uri(s3_uri)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    if sort_direction not in {"asc", "desc"}:
+        sort_direction = "asc"
+
+    if sort_by not in ("Key", "Size", "LastModified"):
+        sort_by = None
 
     try:
         meili_client.get_index(bucket)
@@ -161,7 +170,9 @@ def list_s3_folder_children(s3_uri: str = Query(..., description="s3://bucket/pr
             prefix=prefix,
             path=path,
             contains=contains,
-            limit=limit
+            limit=limit,
+            sort_by=sort_by,
+            sort_direction=sort_direction
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

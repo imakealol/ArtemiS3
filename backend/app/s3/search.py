@@ -289,7 +289,9 @@ def list_folder_children_from_meili(
     prefix: str = "",
     path: Optional[str] = None,
     contains: Optional[str] = None,
-    limit: int = 100
+    limit: int = 100,
+    sort_by: Optional[str] = None,
+    sort_direction: str = "asc"
 ) -> Dict[str, Any]:
     """Return direct child folders/files and breadcrumbs for a folder path."""
     meili_url = os.getenv("MEILISEARCH_URL")
@@ -332,10 +334,13 @@ def list_folder_children_from_meili(
         if active
         else "ParentPath = ''"
     )
+    sort_field = sort_by if sort_by in (
+        "Key", "Size", "LastModified") else "Key"
+    sort_order = "desc" if sort_direction == "desc" else "asc"
     file_opts: Dict[str, Any] = {
         "filter": [parent_filter],
         "limit": limit,
-        "sort": ["Key:asc"],
+        "sort": [f"{sort_field}:{sort_order}"],
         "attributesToRetrieve": ["Key", "Size", "LastModified", "StorageClass"]
     }
     file_result = meili_client.index(bucket).search(contains or "", file_opts)

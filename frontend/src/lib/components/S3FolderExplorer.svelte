@@ -12,11 +12,7 @@
   export let onNavigateUp: () => void;
 </script>
 
-{#if !searchedYet}
-  <p class="mt-3 text-gray-600 text-sm">
-    No folders yet. Enter a query and run a folder search.
-  </p>
-{:else if searchedYet && suggestions.length === 0}
+{#if searchedYet && suggestions.length === 0}
   <p class="mt-3 text-gray-600 text-sm">
     No folders found. Try a different query.
   </p>
@@ -67,7 +63,7 @@
                       ? "bg-white border-blue-300"
                       : "border-transparent hover:bg-white hover:border-gray-200"
                   }`}
-                  on:Click={() => onOpenFolder(folder.path)}
+                  on:click={() => onOpenFolder(folder.path)}
                 >
                   <span class="font-mono">{folder.path}</span>
                   <span class="text-gray-500 ml-2"

@@ -49,4 +49,6 @@ export type S3FolderChildrenRequest = {
   path?: string;
   contains?: string;
   limit?: number;
+  sortBy?: "Key" | "Size" | "LastModified";
+  sortDirection?: "asc" | "desc";
 };

@@ -134,6 +134,8 @@
       path: path || undefined,
       contains: s3Contains || undefined,
       limit: s3Limit,
+      sortBy,
+      sortDirection,
     });
     activeFolderPath = data.path;
     folderBreadcrumbs = data.breadcrumbs;
@@ -179,8 +181,7 @@
     await runS3Search();
   }
 
-  function handleSort(column: "Key" | "Size" | "LastModified") {
-    if (viewMode !== "file") return;
+  async function handleSort(column: "Key" | "Size" | "LastModified") {
     if (!column) return;
 
     // toggle if same column
@@ -192,7 +193,12 @@
       sortDirection = "desc";
     }
 
-    runS3Search();
+    // load files for folder path
+    if (viewMode === "folder") {
+      await loadFolderChildren(activeFolderPath || undefined);
+      return;
+    }
+    await runS3Search();
   }
 
   // calls on apply from FilterPanel

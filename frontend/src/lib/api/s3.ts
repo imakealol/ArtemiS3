@@ -92,6 +92,8 @@ export async function searchS3FolderChildren(params: S3FolderChildrenRequest): P
   addQueryParam(queries, "path", params.path);
   addQueryParam(queries, "contains", params.contains);
   addQueryParam(queries, "limit", params.limit);
+  addQueryParam(queries, "sort_by", params.sortBy);
+  addQueryParam(queries, "sort_direction", params.sortDirection);
 
   const res = await fetch(`/api/s3/folders/children?${queries.toString()}`);
   if (!res.ok) {
