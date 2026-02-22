@@ -175,7 +175,7 @@
                       src={previewUrl}
                       title="PDF Preview"
                       class="w-full max-w-4xl h-[600px] border shadow-md bg-white"
-                    />
+                    ></iframe>
                   {:else if obj.size > 52428800}
                     <div
                       class="flex flex-col items-center p-8 border-2 border-dashed border-gray-300 rounded-lg bg-white shadow-sm text-center max-w-md"

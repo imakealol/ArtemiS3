@@ -396,20 +396,17 @@
         loading={s3Loading}
         suggestions={folderSuggestions}
         children={folderChildren}
+        files={folderFiles}
         breadcrumbs={folderBreadcrumbs}
         activePath={activeFolderPath}
+        {s3Uri}
+        {sortBy}
+        {sortDirection}
         onOpenFolder={openFolder}
         onOpenBreadcrumb={openBreadcrumb}
         onNavigateUp={navigateUp}
-      />
-      <S3ResultsTable
-        {s3Uri}
-        items={folderFiles}
-        searchedYet={hasSearched}
-        onDownload={handleDownload}
         onSort={handleSort}
-        {sortBy}
-        {sortDirection}
+        onDownload={handleDownload}
       />
     </div>
   {/if}

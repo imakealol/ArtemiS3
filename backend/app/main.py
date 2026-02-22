@@ -11,10 +11,10 @@ from app.s3.utils import parse_s3_uri
 
 app = FastAPI(title="ArtemiS3 API")
 app.add_middleware(
-    CORSMiddleware, 
-    allow_origins=["*"], 
-    allow_credentials=True, 
-    allow_methods=["*"], 
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
     allow_headers=["*"]
 )
 
@@ -27,15 +27,18 @@ app.include_router(s3_router)
 # index refresh async block
 REFRESH_INTERVAL_SECONDS = int(os.getenv("REFRESH_INTERVAL_SECONDS", "3600"))
 REFRESH_BUCKETS = os.getenv(
-    "REFRESH_BUCKETS", 
-    "s3://asc-pds-services/pigpen,s3://asc-astropedia/Mars"#,s3://asc-pds-services,s3://asc-astropedia"
+    "REFRESH_BUCKETS",
+    # ,s3://asc-pds-services,s3://asc-astropedia"
+    "s3://asc-pds-services/pigpen,s3://asc-astropedia/Mars"
 )
+
 
 def _parse_refresh_targets():
     return [s.strip() for s in REFRESH_BUCKETS.split(",") if s.strip()]
 
+
 async def _index_refresh_loop():
-    await asyncio.sleep(2) # let app start
+    await asyncio.sleep(2)  # let app start
     print("Starting index refresh loop...")
     while True:
         for s3_uri in _parse_refresh_targets():
@@ -49,17 +52,21 @@ async def _index_refresh_loop():
         print(f"Waiting {REFRESH_INTERVAL_SECONDS} seconds...")
         await asyncio.sleep(REFRESH_INTERVAL_SECONDS)
 
+
 @app.on_event("startup")
 async def start_refresh_scheduler():
     asyncio.create_task(_index_refresh_loop())
+
 
 @app.get("/api/health")
 def health() -> dict:
     return {"status": "ok"}
 
+
 @app.get("/api/test")
 def test(name: str = "world") -> dict:
     return {"message": f"Hello, {name}!"}
+
 
 @app.get("/api/meilisearch/test")
 def test() -> dict:
