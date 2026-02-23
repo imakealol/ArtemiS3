@@ -16,7 +16,15 @@
   export let sortBy: "Key" | "Size" | "LastModified" | undefined;
   export let sortDirection: "asc" | "desc";
 
-  const PREVIEWABLE_EXTENSIONS = [".pdf", ".png", ".jpg", ".jpeg", ".webp"];
+  const PREVIEWABLE_EXTENSIONS = [
+    ".pdf",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".webp",
+    ".mp4",
+    ".mp3",
+  ];
   const PAGE_SIZE: number = 10;
 
   let previewKey: string | null = null;
@@ -81,41 +89,41 @@
         <tr class="border-b bg-white">
           <th
             title="Sort Alphabetically"
-            class="text-left p-2 cursor-pointer"
+            class="text-left p-2 cursor-pointer w-auto"
             on:click={() => onSort("Key")}
           >
-            {sortBy === "Key"
-              ? sortDirection === "asc"
+            {sort_by === "Key"
+              ? sort_direction === "asc"
                 ? "Key ▲"
                 : "Key ▼"
               : "Key —"}
           </th>
           <th
             title="Sort by Biggest/Smallest"
-            class="text-left p-2 cursor-pointer"
+            class="text-left p-2 cursor-pointer w-32 whitespace-nowrap"
             on:click={() => onSort("Size")}
           >
-            {sortBy === "Size"
-              ? sortDirection === "asc"
+            {sort_by === "Size"
+              ? sort_direction === "asc"
                 ? "Size ▲"
                 : "Size ▼"
               : "Size —"}
           </th>
           <th
             title="Sort by Most Recent/Least Recent"
-            class="text-left p-2 cursor-pointer"
+            class="text-left p-2 cursor-pointer w-56 whitespace-nowrap"
             on:click={() => onSort("LastModified")}
           >
-            {sortBy === "LastModified"
-              ? sortDirection === "asc"
+            {sort_by === "LastModified"
+              ? sort_direction === "asc"
                 ? "Last modified  ▲"
                 : "Last modified  ▼"
               : "Last modified —"}
           </th>
 
-          <th class="text-left p-2 min-w-[102px]">Storage class</th>
-          <th class="text-center p-2">Download</th>
-          <th class="text-center p-2 min-w-[86px]">Preview</th>
+          <th class="text-left p-2 w-32 whitespace-nowrap">Storage class</th>
+          <th class="text-center p-2 w-24">Download</th>
+          <th class="text-center p-2 w-24">Preview</th>
         </tr>
       </thead>
       <tbody>
@@ -124,10 +132,16 @@
             <td class="p-2 font-mono text-xs break-all">{obj.key}</td>
 
             <td class="p-2 whitespace-nowrap">
-              {#if obj.size < 1048576}
+              {#if obj.size < 1024}
+                {obj.size} Bytes
+              {:else if obj.size < 1048576}
                 {(obj.size / 1024).toFixed(2)} KB
+              {:else if obj.size < 1073741824}
+                {(obj.size / 1024 ** 2).toFixed(2)} MB
+              {:else if obj.size < 1099511627776}
+                {(obj.size / 1024 ** 3).toFixed(2)} GB
               {:else}
-                {(obj.size / (1024 * 1024)).toFixed(2)} MB
+                {(obj.size / 1024 ** 4).toFixed(2)} TB
               {/if}
             </td>
 
@@ -175,7 +189,30 @@
                       src={previewUrl}
                       title="PDF Preview"
                       class="w-full max-w-4xl h-[600px] border shadow-md bg-white"
-                    ></iframe>
+                    />
+                  {:else if obj.key.endsWith(".mp4")}
+                    <div
+                      class="bg-black p-1 border shadow-lg rounded-sm w-full max-w-4xl"
+                    >
+                      <video
+                        controls
+                        class="w-full max-h-[600px] block mx-auto"
+                      >
+                        <source src={previewUrl} type="video/mp4" />
+                        Your browser does not support the video tag.
+                      </video>
+                    </div>
+                  {:else if obj.key.endsWith(".mp3")}
+                    <div
+                      class="bg-white p-6 border shadow-lg rounded-md w-full max-w-xl"
+                    >
+                      <p class="text-xs text-gray-500 mb-2 font-mono">
+                        Audio Preview: {obj.key.split("/").pop()}
+                      </p>
+                      <audio controls src={previewUrl} class="w-full">
+                        Your browser does not support the audio element.
+                      </audio>
+                    </div>
                   {:else if obj.size > 52428800}
                     <div
                       class="flex flex-col items-center p-8 border-2 border-dashed border-gray-300 rounded-lg bg-white shadow-sm text-center max-w-md"
@@ -184,15 +221,15 @@
                         Massive File Notice
                       </p>
                       <p class="text-gray-600 mb-6">
-                        This file is <strong
+                        This image is <strong
                           >{(obj.size / (1024 * 1024)).toFixed(1)} MB</strong
-                        >. Loading it here might crash your browser.
+                        >. To save memory, please open it in a new tab.
                       </p>
                       <a
                         href={previewUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        class="bg-blue-600 text-white px-6 py-2 rounded-md"
+                        class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors"
                       >
                         Open Full Resolution ↗
                       </a>
