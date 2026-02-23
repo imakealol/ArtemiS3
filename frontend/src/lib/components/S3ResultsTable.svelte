@@ -6,7 +6,6 @@
     ChevronLeft,
     ChevronRight,
     Download,
-    Minus,
   } from "@lucide/svelte";
 
   export let s3Uri: string = "";
@@ -14,8 +13,8 @@
   export let searchedYet: boolean = false;
   export let onDownload: (key: string, bucket: string) => void;
   export let onSort: (column: "Key" | "Size" | "LastModified") => void;
-  export let sort_by: "Key" | "Size" | "LastModified" | undefined;
-  export let sort_direction: "asc" | "desc";
+  export let sortBy: "Key" | "Size" | "LastModified" | undefined;
+  export let sortDirection: "asc" | "desc";
 
   const PREVIEWABLE_EXTENSIONS = [
     ".pdf",
@@ -146,8 +145,8 @@
               {/if}
             </td>
 
-            <td class="p-2">{obj.last_modified ?? "unknown"}</td>
-            <td class="p-2">{obj.storage_class ?? "STANDARD"}</td>
+            <td class="p-2">{obj.lastModified ?? "unknown"}</td>
+            <td class="p-2">{obj.storageClass ?? "STANDARD"}</td>
             <td class="p-2 text-center">
               <button
                 on:click={() => onDownload(obj.key)}
@@ -162,7 +161,7 @@
               {#if canPreview(obj.key)}
                 <button
                   on:click={() => handlePreview(obj.key)}
-                  class="text-green-600 hover:text-green-800 font-bold"
+                  class="text-green-600 hover:text-green-800 font-bold cursor-pointer"
                 >
                   Preview
                 </button>
@@ -250,7 +249,7 @@
                       previewUrl = null;
                       previewKey = null;
                     }}
-                    class="mt-4 text-xs text-gray-400 hover:text-red-500 uppercase tracking-widest font-bold"
+                    class="mt-4 text-xs text-gray-400 hover:text-red-500 uppercase tracking-widest font-bold cursor-pointer"
                   >
                     [ Close Preview ]
                   </button>
@@ -269,7 +268,7 @@
       </span>
       <div class="flex">
         <button
-          class="page-button border-l rounded-l-xl"
+          class="page-button border-l rounded-l-xl cursor-pointer disabled:cursor-not-allowed"
           title="Go to the first page"
           disabled={page <= 0}
           on:click={() => (page = 0)}
@@ -277,7 +276,7 @@
           <ChevronFirst />
         </button>
         <button
-          class="page-button border-l"
+          class="page-button border-l cursor-pointer disabled:cursor-not-allowed"
           title="Go to the previous page"
           disabled={page <= 0}
           on:click={() => page--}
@@ -285,7 +284,7 @@
           <ChevronLeft />
         </button>
         <button
-          class="page-button border-l"
+          class="page-button border-l cursor-pointer disabled:cursor-not-allowed"
           title="Go to the next page"
           disabled={page >= maxPage}
           on:click={() => page++}
@@ -293,7 +292,7 @@
           <ChevronRight />
         </button>
         <button
-          class="page-button border-x rounded-r-xl"
+          class="page-button border-x rounded-r-xl cursor-pointer disabled:cursor-not-allowed"
           title="Go to the last page"
           disabled={page >= maxPage}
           on:click={() => (page = maxPage)}

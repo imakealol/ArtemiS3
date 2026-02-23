@@ -1,9 +1,15 @@
 <script lang="ts">
   import { Search as SearchIcon } from "@lucide/svelte";
-  import { searchS3 } from "../api/s3";
-  import { type S3ObjectModel, type S3SearchRequest } from "../schemas/s3";
+  import { searchS3, searchS3Folders, searchS3FolderChildren } from "../api/s3";
+  import {
+    type S3ObjectModel,
+    type S3SearchRequest,
+    type S3FolderModel,
+    type S3FolderChildrenResponse,
+  } from "../schemas/s3";
   import FilterPanel from "../components/FilterPanel.svelte";
   import S3ResultsTable from "../components/S3ResultsTable.svelte";
+  import S3FolderExplorer from "../components/S3FolderExplorer.svelte";
   import S3IndexRefreshProgress from "./S3IndexRefreshProgress.svelte";
 
   export let className = "";
@@ -27,9 +33,16 @@
   let s3Loading = false;
   let s3Error: string | null = null;
   let s3Results: S3ObjectModel[] = [];
+  let viewMode: "file" | "folder" = "file";
 
-  let sort_by: "Key" | "Size" | "LastModified" | undefined = undefined;
-  let sort_direction: "asc" | "desc" = "asc";
+  let folderSuggestions: S3FolderModel[] = [];
+  let folderChildren: S3FolderModel[] = [];
+  let folderBreadcrumbs: S3FolderChildrenResponse["breadcrumbs"] = [];
+  let activeFolderPath = "";
+  let folderFiles: S3ObjectModel[] = [];
+
+  let sortBy: "Key" | "Size" | "LastModified" | undefined = undefined;
+  let sortDirection: "asc" | "desc" = "asc";
 
   type FilterState = {
     suffixes?: string[];
@@ -56,6 +69,7 @@
     } else {
       s3Uri = value;
     }
+    resetFolderState();
   }
 
   function handleCustomS3UriInput(value: string) {
@@ -63,9 +77,27 @@
     if (selectedS3Bucket === "custom") {
       s3Uri = customS3Uri;
     }
+    resetFolderState();
   }
 
   let hasSearched = false;
+  function resetFolderState() {
+    folderSuggestions = [];
+    folderChildren = [];
+    folderBreadcrumbs = [];
+    activeFolderPath = "";
+    folderFiles = [];
+  }
+
+  function setViewMode(mode: string) {
+    if (mode !== "file" && mode !== "folder") return;
+    if (viewMode === mode) return;
+    viewMode = mode;
+    hasSearched = false;
+    s3Error = null;
+    resetFolderState();
+  }
+
   async function runS3Search() {
     s3Loading = true;
     s3Error = null;
@@ -81,8 +113,8 @@
         storageClasses: s3Filters.storageClasses,
         modifiedAfter: s3Filters.modifiedAfter,
         modifiedBefore: s3Filters.modifiedBefore,
-        sort_by,
-        sort_direction,
+        sortBy,
+        sortDirection,
       };
 
       hasSearched = true;
@@ -96,19 +128,77 @@
     }
   }
 
-  function handleSort(column: "Key" | "Size" | "LastModified") {
+  async function loadFolderChildren(path?: string) {
+    const data = await searchS3FolderChildren({
+      s3Uri,
+      path: path || undefined,
+      contains: s3Contains || undefined,
+      limit: s3Limit,
+      sortBy,
+      sortDirection,
+    });
+    activeFolderPath = data.path;
+    folderBreadcrumbs = data.breadcrumbs;
+    folderChildren = data.children;
+    folderFiles = data.files ?? [];
+  }
+
+  async function runFolderSearch() {
+    s3Loading = true;
+    s3Error = null;
+
+    try {
+      hasSearched = true;
+      folderSuggestions = await searchS3Folders({
+        s3Uri,
+        contains: s3Contains || undefined,
+        limit: s3Limit,
+      });
+
+      if (folderSuggestions.length > 0) {
+        await loadFolderChildren(folderSuggestions[0].path);
+      } else {
+        folderChildren = [];
+        folderBreadcrumbs = [];
+        activeFolderPath = "";
+        folderFiles = [];
+      }
+    } catch (err) {
+      s3Error =
+        err instanceof Error ? err.message : "Unknown folder search error";
+      resetFolderState();
+      console.error("S3 folder search failed:", err);
+    } finally {
+      s3Loading = false;
+    }
+  }
+
+  async function runSearchByMode() {
+    if (viewMode === "folder") {
+      await runFolderSearch();
+      return;
+    }
+    await runS3Search();
+  }
+
+  async function handleSort(column: "Key" | "Size" | "LastModified") {
     if (!column) return;
 
     // toggle if same column
-    if (sort_by === column) {
-      sort_direction = sort_direction === "asc" ? "desc" : "asc";
+    if (sortBy === column) {
+      sortDirection = sortDirection === "asc" ? "desc" : "asc";
     } else {
-      sort_by = column;
+      sortBy = column;
       // default first click direction for all columns
-      sort_direction = "desc";
+      sortDirection = "desc";
     }
 
-    runS3Search();
+    // load files for folder path
+    if (viewMode === "folder") {
+      await loadFolderChildren(activeFolderPath || undefined);
+      return;
+    }
+    await runS3Search();
   }
 
   // calls on apply from FilterPanel
@@ -140,7 +230,7 @@
     s3Filters = next;
 
     // rerun search when filters are applied
-    if (s3Uri) {
+    if (s3Uri && viewMode === "file") {
       await runS3Search();
     }
   }
@@ -158,6 +248,22 @@
     // trigger browser download
     window.location.href = url;
   }
+
+  async function openFolder(path: string) {
+    await loadFolderChildren(path);
+  }
+
+  async function openBreadcrumb(path: string) {
+    await loadFolderChildren(path || undefined);
+  }
+
+  async function navigateUp() {
+    if (!activeFolderPath) return;
+    const segments = activeFolderPath.split("/").filter(Boolean);
+    segments.pop();
+    const parentPath = segments.join("/");
+    await loadFolderChildren(parentPath || undefined);
+  }
 </script>
 
 <section class={`border rounded p-4 bg-white ${className}`}>
@@ -165,9 +271,40 @@
 
   <form
     class="flex flex-wrap gap-3 items-end"
-    on:submit|preventDefault={runS3Search}
+    on:submit|preventDefault={runSearchByMode}
   >
-    <FilterPanel onApply={handleFilterApply} />
+    <div class="flex flex-col">
+      <span class="text-sm font-medium mb-1">Mode</span>
+      <div class="inline-flex border rounded overflow-hidden">
+        <button
+          type="button"
+          class={`px-3 py-2 text-sm cursor-pointer ${
+            viewMode === "file"
+              ? "bg-blue-600 text-white"
+              : "bg-white text-gray-700"
+          }`}
+          on:click={() => setViewMode("file")}
+        >
+          File
+        </button>
+        <button
+          type="button"
+          class={`px-3 py-2 text-sm border-l cursor-pointer ${
+            viewMode === "folder"
+              ? "bg-blue-600 text-white"
+              : "bg-white text-gray-700"
+          }`}
+          on:click={() => setViewMode("folder")}
+        >
+          Folder
+        </button>
+      </div>
+    </div>
+
+    {#if viewMode === "file"}
+      <FilterPanel onApply={handleFilterApply} />
+    {/if}
+
     <div class="flex flex-col">
       <label for="s3Uri" class="text-sm font-medium mb-1">S3 URI</label>
       <select
@@ -226,14 +363,14 @@
 
     <button
       type="submit"
-      class="flex items-center gap-2 bg-blue-600 text-white px-3 py-2 rounded disabled:opacity-60"
+      class="flex items-center gap-2 bg-blue-600 text-white px-3 py-2 rounded cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
       disabled={s3Loading}
     >
       <SearchIcon class="w-4 h-4" />
       {#if s3Loading}
         Searching
       {:else}
-        Run S3 search
+        {viewMode === "folder" ? "Run Folder Search" : "Run S3 search"}
       {/if}
     </button>
   </form>
@@ -242,13 +379,35 @@
     <p class="mt-3 text-red-600">{s3Error}</p>
   {/if}
 
-  <S3ResultsTable
-    {s3Uri}
-    items={s3Results}
-    searchedYet={hasSearched}
-    onDownload={handleDownload}
-    onSort={handleSort}
-    {sort_by}
-    {sort_direction}
-  />
+  {#if viewMode === "file"}
+    <S3ResultsTable
+      {s3Uri}
+      items={s3Results}
+      searchedYet={hasSearched}
+      onDownload={handleDownload}
+      onSort={handleSort}
+      {sortBy}
+      {sortDirection}
+    />
+  {:else}
+    <div class="space-y-4">
+      <S3FolderExplorer
+        searchedYet={hasSearched}
+        loading={s3Loading}
+        suggestions={folderSuggestions}
+        children={folderChildren}
+        files={folderFiles}
+        breadcrumbs={folderBreadcrumbs}
+        activePath={activeFolderPath}
+        {s3Uri}
+        {sortBy}
+        {sortDirection}
+        onOpenFolder={openFolder}
+        onOpenBreadcrumb={openBreadcrumb}
+        onNavigateUp={navigateUp}
+        onSort={handleSort}
+        onDownload={handleDownload}
+      />
+    </div>
+  {/if}
 </section>
