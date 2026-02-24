@@ -16,6 +16,7 @@
   export let searchedYet: boolean = false;
   export let onDownload: (key: string, bucket?: string) => void;
   export let onSort: (column: "Key" | "Size" | "LastModified") => void;
+  export let editTags: (key: string, tags: string[]) => Promise<void>;
   export let sortBy: "Key" | "Size" | "LastModified" | undefined;
   export let sortDirection: "asc" | "desc";
 
@@ -29,7 +30,7 @@
     ".mp3",
   ];
   const PAGE_SIZE: number = 10;
-  $: console.log(items[0]);
+
   let previewKey: string | null = null;
   let previewUrl: string | null = null;
 
@@ -342,8 +343,13 @@
     {editing}
     {setEditing}
     localTags={[...(items.find((obj) => obj.key === editing)?.tags ?? [])]}
-    submitTags={async (tags: string[]) => {
-      console.log(tags);
+    submitTags={async (key, tags) => {
+      await editTags(key, tags);
+      items = items.map((obj) => {
+        if (obj.key === key) obj.tags = tags;
+        return obj;
+      });
+      setEditing(null);
     }}
   />
 {/if}

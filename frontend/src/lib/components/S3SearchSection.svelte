@@ -1,6 +1,11 @@
 <script lang="ts">
   import { Search as SearchIcon } from "@lucide/svelte";
-  import { searchS3, searchS3Folders, searchS3FolderChildren } from "../api/s3";
+  import {
+    searchS3,
+    searchS3Folders,
+    searchS3FolderChildren,
+    editObjectTags,
+  } from "../api/s3";
   import {
     type S3ObjectModel,
     type S3SearchRequest,
@@ -264,6 +269,11 @@
     const parentPath = segments.join("/");
     await loadFolderChildren(parentPath || undefined);
   }
+
+  async function editTags(key: string, tags: string[]) {
+    const bucket = getBucketFromUri(s3Uri);
+    await editObjectTags(bucket, key, tags);
+  }
 </script>
 
 <section class={`border rounded p-4 bg-white ${className}`}>
@@ -388,6 +398,7 @@
       onSort={handleSort}
       {sortBy}
       {sortDirection}
+      {editTags}
     />
   {:else}
     <div class="space-y-4">

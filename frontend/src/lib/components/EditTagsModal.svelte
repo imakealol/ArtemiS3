@@ -4,7 +4,7 @@
   export let editing: string | null;
   export let localTags: string[];
   export let setEditing: (key: string | null) => void;
-  export let submitTags: (tags: string[]) => Promise<void>;
+  export let submitTags: (key: string, tags: string[]) => Promise<void>;
 
   let tagInput = "";
 
@@ -119,8 +119,7 @@
         <button
           class="button w-fit self-center"
           on:click={async () => {
-            await submitTags(localTags);
-            setEditing(null);
+            await submitTags(editing, localTags);
           }}>Save Changes</button
         >
       </div>

@@ -22,6 +22,8 @@ from app.s3.utils import (
     generate_preview_url
 )
 from app.s3.refresh_status import get_status
+from app.schemas.meili_models import TagRequest
+from app.s3.index_refresh import get_doc_id
 
 s3_router = APIRouter(prefix="/api/s3", tags=["s3"])
 
@@ -226,5 +228,23 @@ def s3_preview(bucket: str, key: str):
 
 
 @s3_router.post("/tag")
-def edit_tags(bucket: str, key: str, tags: List[str]):
-    print(bucket, key, tags)
+def edit_tags(data: TagRequest):
+    meilisearch_url = os.getenv("MEILISEARCH_URL")
+    meili_client = meilisearch.Client(meilisearch_url)
+
+    try:
+        index = meili_client.get_index(data.bucket)
+        doc_id = get_doc_id(data.key)
+        index.update_documents([{
+            "ID": doc_id,
+            "Tags": data.tags
+        }]) 
+        #NOTE skip_creation=True not available in current version, 
+        # we should update the meilisearch client when we get the change so that this function is not able to create new documents
+
+        #TODO Save tags to a database for persistence
+
+    except Exception:
+        raise HTTPException(
+            status_code=500, detail="Error encountered while editing tags. Check that the meilisearch index and document exist.")
+    

@@ -209,7 +209,7 @@ def create_index(index: str, file, meili_client: meilisearch.Client, s3_uri: Opt
     parent_path = key_parent_path(norm_key)
     ancestors = parent_ancestors(parent_path)
     depth = path_depth(parent_path)
-    tags = []  # empty user tag array
+    tags = []  # TODO Read tags from database
     keywords = []
 
     if ctype in TEXT_CONTENT_TYPES:

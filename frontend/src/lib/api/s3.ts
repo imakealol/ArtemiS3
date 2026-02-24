@@ -7,6 +7,7 @@ import type {
   S3FolderChildrenResponse
 } from "../schemas/s3";
 import type { MeilisearchRefreshStatus } from "../schemas/meilisearch";
+import axios from "axios";
 
 type RawS3ObjectModel = {
   key: string;
@@ -15,6 +16,7 @@ type RawS3ObjectModel = {
   storage_class?: string;
   lastModified?: string;
   storageClass?: string;
+  tags: string[];
 };
 
 // helper to add parameters to queries
@@ -66,6 +68,7 @@ export async function searchS3(params: S3SearchRequest): Promise<S3ObjectModel[]
     size: item.size,
     lastModified: item.lastModified ?? item.last_modified,
     storageClass: item.storageClass ?? item.storage_class,
+    tags: item.tags
   }));
 }
 
@@ -113,4 +116,12 @@ export async function searchS3FolderChildren(params: S3FolderChildrenRequest): P
       storageClass: item.storageClass ?? item.storage_class
     }))
   };
+}
+
+export async function editObjectTags(bucket: string, key: string, tags: string[]) {
+  try {
+    const res = await axios.post("/api/s3/tag", {bucket, key, tags})
+  } catch(err) {
+    console.error("Failed to edit tags", err)
+  }
 }
