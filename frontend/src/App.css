@@ -12,9 +12,10 @@ h3 {
 
 /* apply as class instead of to all buttons for more freedom with button style */
 .button {
-  @apply px-2 py-1 border border-gray-600 outline-gray-800 hover:border-gray-400
-         hover:outline hover:shadow rounded-lg cursor-pointer bg-gray-100 active:bg-gray-200
-         disabled:border-gray-500 disabled:hover:outline-none disabled:active:bg-gray-100;
+  @apply border bg-blue-500 text-white enabled:hover:bg-blue-600 cursor-pointer p-1 m-1 disabled:bg-gray-400 
+           disabled:cursor-not-allowed disabled:text-gray-200 enabled:hover:outline-1 outline-blue-700
+          rounded enabled:hover:shadow-sm enabled:active:outline-2 transform duration-100 enabled:active:bg-blue-700
+          enabled:active:border-blue-700 enabled:active:shadow-xl focus-visible:outline-offset-1  
 }
 
 input {
@@ -33,4 +34,31 @@ input {
 .page-button {
   @apply cursor-pointer px-2 aspect-square border-y border-gray-300 active:bg-gray-200
               disabled:cursor-default disabled:bg-gray-300 disabled:text-gray-500 hover:bg-gray-100
+}
+
+.icon-button {
+  @apply text-blue-600 hover:text-blue-800 cursor-pointer p-1 m-1 disabled:text-gray-500 disabled:cursor-not-allowed
+           enabled:hover:outline outline-gray-300 rounded-full enabled:hover:shadow-sm enabled:hover:bg-slate-100 
+           enabled:active:bg-slate-200 enabled:active:outline-offset-1 enabled:active:outline-2 transform duration-100
+}
+
+
+table.grid-table {
+  display: grid;
+  border-collapse: collapse;
+  /* When using this class, make sure to define your grid columns template (inline), like: */
+  /* grid-template-columns: max-content 1fr max-content max-content; */
+  
+  thead, tbody, tr {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+    align-items: center;
+    justify-items: start;
+    box-sizing: border-box;
+  }
+
+  th, td {
+    width: 100%;
+  }
 }

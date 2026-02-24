@@ -6,13 +6,17 @@
     ChevronLeft,
     ChevronRight,
     Download,
+    FileSearchCorner,
+    Pencil,
   } from "@lucide/svelte";
+  import EditTagsModal from "./EditTagsModal.svelte";
 
   export let s3Uri: string = "";
   export let items: S3ObjectModel[] = [];
   export let searchedYet: boolean = false;
-  export let onDownload: (key: string, bucket: string) => void;
+  export let onDownload: (key: string, bucket?: string) => void;
   export let onSort: (column: "Key" | "Size" | "LastModified") => void;
+  export let editTags: (key: string, tags: string[]) => Promise<void>;
   export let sortBy: "Key" | "Size" | "LastModified" | undefined;
   export let sortDirection: "asc" | "desc";
 
@@ -38,6 +42,12 @@
     if (page > maxPage) {
       page = maxPage;
     }
+  }
+
+  let editing: string | null = null;
+
+  function setEditing(key: string | null) {
+    editing = key;
   }
 
   async function handlePreview(key: string) {
@@ -70,6 +80,10 @@
     const lowerKey = key.toLowerCase();
     return PREVIEWABLE_EXTENSIONS.some((ext) => lowerKey.endsWith(ext));
   }
+
+  function formatDate(date: string): string {
+    return new Date(date).toLocaleString();
+  }
 </script>
 
 {#if !searchedYet}
@@ -84,7 +98,10 @@
   </p>
 {:else}
   <div class="min-h-[510px] flex flex-col justify-between">
-    <table class="mt-4 w-full border-collapse text-sm">
+    <table
+      class="grid-table mt-4 w-full border-collapse text-sm"
+      style="grid-template-columns: auto max-content max-content max-content max-content 40px 40px 40px;"
+    >
       <thead>
         <tr class="border-b bg-white">
           <th
@@ -92,8 +109,8 @@
             class="text-left p-2 cursor-pointer w-auto"
             on:click={() => onSort("Key")}
           >
-            {sort_by === "Key"
-              ? sort_direction === "asc"
+            {sortBy === "Key"
+              ? sortDirection === "asc"
                 ? "Key ▲"
                 : "Key ▼"
               : "Key —"}
@@ -103,8 +120,8 @@
             class="text-left p-2 cursor-pointer w-32 whitespace-nowrap"
             on:click={() => onSort("Size")}
           >
-            {sort_by === "Size"
-              ? sort_direction === "asc"
+            {sortBy === "Size"
+              ? sortDirection === "asc"
                 ? "Size ▲"
                 : "Size ▼"
               : "Size —"}
@@ -114,16 +131,18 @@
             class="text-left p-2 cursor-pointer w-56 whitespace-nowrap"
             on:click={() => onSort("LastModified")}
           >
-            {sort_by === "LastModified"
-              ? sort_direction === "asc"
+            {sortBy === "LastModified"
+              ? sortDirection === "asc"
                 ? "Last modified  ▲"
                 : "Last modified  ▼"
               : "Last modified —"}
           </th>
 
-          <th class="text-left p-2 w-32 whitespace-nowrap">Storage class</th>
-          <th class="text-center p-2 w-24">Download</th>
-          <th class="text-center p-2 w-24">Preview</th>
+          <th class="text-left p-2 min-w-[102px]">Storage class</th>
+          <th class="text-left p-2">Tags</th>
+          <th class="text-center p-2"></th>
+          <th class="text-center p-2"></th>
+          <th class="text-center p-2"></th>
         </tr>
       </thead>
       <tbody>
@@ -145,35 +164,53 @@
               {/if}
             </td>
 
-            <td class="p-2">{obj.lastModified ?? "unknown"}</td>
+            <td class="p-2"
+              >{obj.lastModified ? formatDate(obj.lastModified) : "unknown"}</td
+            >
             <td class="p-2">{obj.storageClass ?? "STANDARD"}</td>
-            <td class="p-2 text-center">
+            <td class="p-2 text-wrap max-w-60"
+              >{obj.tags && obj.tags.length > 0
+                ? obj.tags.join(", ")
+                : "No Tags"}</td
+            >
+            <td class="text-center">
               <button
                 on:click={() => onDownload(obj.key)}
                 title="Download"
-                class="text-blue-600 hover:text-blue-800 cursor-pointer"
+                class="icon-button"
               >
-                <Download size={18} />
+                <Download size={24} />
               </button>
             </td>
 
-            <td class="p-2 text-center">
+            <td class="text-center">
               {#if canPreview(obj.key)}
                 <button
                   on:click={() => handlePreview(obj.key)}
-                  class="text-green-600 hover:text-green-800 font-bold cursor-pointer"
+                  class="icon-button"
+                  title="Preview Document"
                 >
-                  Preview
+                  <FileSearchCorner size={24} />
                 </button>
               {:else}
                 <button
                   disabled
-                  class="text-red-400 cursor-not-allowed opacity-70 italic"
+                  class="icon-button"
                   title="Cannot preview this file type"
                 >
-                  No Preview
+                  <FileSearchCorner size={24} />
                 </button>
               {/if}
+            </td>
+
+            <td class="text-center">
+              <button
+                class="icon-button"
+                title="Edit Tags"
+                on:click={() => setEditing(obj.key)}
+              >
+                <Pencil size={24} />
+              </button>
             </td>
           </tr>
 
@@ -189,7 +226,7 @@
                       src={previewUrl}
                       title="PDF Preview"
                       class="w-full max-w-4xl h-[600px] border shadow-md bg-white"
-                    />
+                    ></iframe>
                   {:else if obj.key.endsWith(".mp4")}
                     <div
                       class="bg-black p-1 border shadow-lg rounded-sm w-full max-w-4xl"
@@ -302,4 +339,17 @@
       </div>
     </div>
   </div>
+  <EditTagsModal
+    {editing}
+    {setEditing}
+    localTags={[...(items.find((obj) => obj.key === editing)?.tags ?? [])]}
+    submitTags={async (key, tags) => {
+      await editTags(key, tags);
+      items = items.map((obj) => {
+        if (obj.key === key) obj.tags = tags;
+        return obj;
+      });
+      setEditing(null);
+    }}
+  />
 {/if}

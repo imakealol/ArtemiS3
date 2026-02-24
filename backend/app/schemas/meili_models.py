@@ -18,3 +18,8 @@ class MeiliDocumentModel(BaseModel):
     Keywords: List[str]
     Tags: List[str]
     # Prefix: Optional[str] = None
+
+class TagRequest(BaseModel):
+    bucket: str
+    key: str
+    tags: List[str]
