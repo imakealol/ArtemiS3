@@ -66,7 +66,14 @@
         </button>
       </div>
       <div class="py-4 px-8 flex flex-col items-left gap-4">
-        <div>Editing tags for: <br />{editing}</div>
+        <div>
+          Editing tags for:
+          <div
+            class="overflow-x-auto border border-gray-300 rounded p-2 pb-3 bg-slate-50"
+          >
+            {editing}
+          </div>
+        </div>
         <div
           class="flex items-center gap-2 text-nowrap"
           on:submit|preventDefault={() => {
