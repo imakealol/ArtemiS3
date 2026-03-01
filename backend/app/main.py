@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import meilisearch
+import psycopg
 from typing import List, Optional
 from app.api.s3_routes import s3_router
 from app.s3.index_refresh import refresh_meili_index
@@ -77,4 +78,12 @@ def test() -> dict:
 
 @app.get("/api/postgres/test")
 def test() -> dict:
-    return {"url": postgres_url}
+    with psycopg.connect(postgres_url) as conn:
+        info = conn.info
+        with conn.cursor() as cur:
+            cur.execute("""SELECT table_name FROM information_schema.tables
+                WHERE table_schema = 'public'""")
+            tables = []
+            for table in cur.fetchall():
+                tables.append(table[0])
+    return {"tables": tables}

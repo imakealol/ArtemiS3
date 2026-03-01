@@ -45,7 +45,7 @@ services:
       - postgres
     environment:
       - MEILISEARCH_URL=http://meilisearch:7700
-      - DATABASE_URL=postgres://a3_admin:db_password@postgres:5432/artemis3
+      - DATABASE_URL=postgresql://a3_admin:db_password@postgres:5432/artemis3
     networks:
       - net
 
@@ -63,7 +63,7 @@ services:
       - net
       
   postgres:
-    image: postgres:latest
+    image: postgres
     container_name: postgres
     environment:
       - POSTGRES_USER=a3_admin
@@ -72,7 +72,8 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/postgresql
+      - ./initdb:/docker-entrypoint-initdb.d
     networks:
       - net
 
