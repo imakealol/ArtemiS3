@@ -16,6 +16,8 @@
   import S3ResultsTable from "../components/S3ResultsTable.svelte";
   import S3FolderExplorer from "../components/S3FolderExplorer.svelte";
   import S3IndexRefreshProgress from "./S3IndexRefreshProgress.svelte";
+  import { onMount, onDestroy, tick } from "svelte";
+    import type { AnyARecord } from "node:dns";
 
   export let className = "";
 
@@ -48,6 +50,26 @@
 
   let sortBy: "Key" | "Size" | "LastModified" | undefined = undefined;
   let sortDirection: "asc" | "desc" = "asc";
+
+  // ===== Local Storage Keys =====
+  const QUERY_KEY = "artemis_recent_queries";
+  const FILTER_KEY = "artemis_saved_filter_presets";
+
+  const MAX_QUERIES = 10;
+
+  // ===== Recent Queries =====
+  let recentQueries: string[] = [];
+  let showQueryDropdown = false;
+  let dropdownContainer: HTMLDivElement;
+  let filterPanelRef: any;
+
+  // ===== Filter Presets =====
+  type FilterPreset = {
+    name: string;
+    filters: FilterState;
+  };
+
+  let savedFilterPresets: FilterPreset[] = [];
 
   type FilterState = {
     suffixes?: string[];
@@ -121,9 +143,9 @@
         sortBy,
         sortDirection,
       };
-
       hasSearched = true;
       s3Results = await searchS3(request);
+      saveQuery(s3Contains);
     } catch (err) {
       s3Error = err instanceof Error ? err.message : "Unknown S3 error";
       s3Results = [];
@@ -154,6 +176,7 @@
 
     try {
       hasSearched = true;
+      saveQuery(s3Contains);
       folderSuggestions = await searchS3Folders({
         s3Uri,
         contains: s3Contains || undefined,
@@ -274,6 +297,93 @@
     const bucket = getBucketFromUri(s3Uri);
     await editObjectTags(bucket, key, tags);
   }
+
+
+  // ===== Recent Searches/Filters Functions =====
+  onMount(() => {
+    if (typeof window === "undefined") return;
+
+    const storedQueries = localStorage.getItem(QUERY_KEY);
+    if (storedQueries) {
+      recentQueries = JSON.parse(storedQueries);
+    }
+
+    const storedFilters = localStorage.getItem(FILTER_KEY);
+    if (storedFilters) {
+      savedFilterPresets = JSON.parse(storedFilters);
+    }
+
+    document.addEventListener("click", handleClickOutside);
+  });
+
+  function saveQuery(query: string) {
+    if (!query) return;
+
+    const filtered = recentQueries.filter((q) => q !== query);
+    recentQueries = [query, ...filtered].slice(0, MAX_QUERIES);
+
+    localStorage.setItem(QUERY_KEY, JSON.stringify(recentQueries));
+  }
+
+  function deleteQuery(queryToDelete: string) {
+    recentQueries = recentQueries.filter(q => q !== queryToDelete);
+    localStorage.setItem(QUERY_KEY, JSON.stringify(recentQueries));
+  }
+
+  function saveCurrentFiltersAsPreset() {
+    const current = filterPanelRef.getCurrentFilters();
+
+    const name = prompt("Preset name?");
+    if (!name) return;
+
+    // Check for duplicate
+    const existingIndex = savedFilterPresets.findIndex(f => f.name === name);
+
+    if (existingIndex !== -1) {
+      const overwrite = confirm(
+        `A filter named "${name}" already exists. Do you want to overwrite it?`
+      );
+      if (!overwrite) return; // Cancel saving
+      // Overwrite existing filter
+      savedFilterPresets[existingIndex] = { name, filters: current };
+    } else {
+      // Add new filter
+      savedFilterPresets = [...savedFilterPresets, { name, filters: current }];
+    }
+
+    localStorage.setItem(
+      FILTER_KEY,
+      JSON.stringify(savedFilterPresets)
+    );
+  }
+
+  async function applyFilterPreset(preset: FilterPreset) {
+    s3Filters = preset.filters;
+
+    // wait a tick so FilterPanel updates
+    await tick();
+
+    if (viewMode === "file") {
+      await runS3Search();
+    }
+  }
+
+  function handleClickOutside(event: MouseEvent) {
+    if (!dropdownContainer) return;
+
+    if (!dropdownContainer.contains(event.target as Node)) {
+      showQueryDropdown = false;
+    }
+  }
+
+  function deleteFilterPreset(name: string) {
+    savedFilterPresets = savedFilterPresets.filter(f => f.name !== name);
+    localStorage.setItem(FILTER_KEY, JSON.stringify(savedFilterPresets));
+  }
+
+  onDestroy(() => {
+    document.removeEventListener("click", handleClickOutside);
+  });
 </script>
 
 <section class={`border rounded p-4 bg-white ${className}`}>
@@ -312,8 +422,17 @@
     </div>
 
     {#if viewMode === "file"}
-      <FilterPanel onApply={handleFilterApply} />
+      <FilterPanel
+        bind:this={filterPanelRef}
+        initialFilters={s3Filters}
+        onApply={handleFilterApply}
+        savedFilters={savedFilterPresets}
+        onSave={saveCurrentFiltersAsPreset}
+        onDelete={deleteFilterPreset}
+      />
     {/if}
+
+    
 
     <div class="flex flex-col">
       <label for="s3Uri" class="text-sm font-medium mb-1">S3 URI</label>
@@ -346,17 +465,57 @@
 
     <S3IndexRefreshProgress {s3Uri} />
 
-    <div class="flex flex-col">
+    <div class="flex flex-col relative" bind:this={dropdownContainer}>
       <label for="s3Contains" class="text-sm font-medium mb-1">
         Contains
       </label>
+
       <input
         id="s3Contains"
         type="text"
         bind:value={s3Contains}
         placeholder="optional substring filter"
         class="border rounded p-2 w-48"
+        autocomplete="off"
+        on:focus={() => (showQueryDropdown = true)}
+        on:blur={() => (showQueryDropdown = true)}
       />
+
+      {#if showQueryDropdown && recentQueries.length > 0}
+        <div class="absolute top-full mt-1 w-48 bg-white border rounded shadow z-10 max-h-48 overflow-y-auto">
+          {#each recentQueries.filter(q =>
+            q.toLowerCase().includes(s3Contains.toLowerCase())
+          ) as query}
+
+            <div class="flex items-center justify-between hover:bg-gray-100">
+              
+              <!-- Clickable search option -->
+              <button
+                type="button"
+                class="w-full text-left px-2 py-1 text-sm"
+                on:click={async () => {
+                  s3Contains = query;
+                  await runSearchByMode();
+                  showQueryDropdown = false;
+                }}
+              >
+                {query}
+              </button>
+
+              <!-- Delete button -->
+              <button
+                type="button"
+                class="px-2 text-xs text-gray-400 hover:text-red-500"
+                on:click={() => deleteQuery(query)}
+              >
+                ✕
+              </button>
+
+            </div>
+
+          {/each}
+        </div>
+      {/if}
     </div>
 
     <div class="flex flex-col">
