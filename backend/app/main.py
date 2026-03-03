@@ -79,11 +79,10 @@ def test() -> dict:
 @app.get("/api/postgres/test")
 def test() -> dict:
     with psycopg.connect(postgres_url) as conn:
-        info = conn.info
         with conn.cursor() as cur:
             cur.execute("""SELECT table_name FROM information_schema.tables
                 WHERE table_schema = 'public'""")
-            tables = []
-            for table in cur.fetchall():
-                tables.append(table[0])
-    return {"tables": tables}
+            tables = [table for table in cur.fetchall()]
+            cur.execute("""SELECT * FROM file_tags""")
+            records = [record for record in cur.fetchall()]
+    return {"tables": tables, "records": records}
