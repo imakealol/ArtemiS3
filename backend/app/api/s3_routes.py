@@ -5,6 +5,7 @@ from fastapi import APIRouter, Query, HTTPException
 from fastapi.responses import StreamingResponse
 import meilisearch
 from botocore.exceptions import ClientError
+import psycopg
 from app.s3.search import (
     iter_s3_objects,
     search_from_meili,
@@ -84,8 +85,8 @@ def search_s3(s3_uri: str = Query(..., description="s3://bucket/prefix"),
         except Exception as e:
             raise HTTPException(status_code=502, detail=str(e))
 
-    except Exception:
-        print("Index Doesn't Exist, running manual search")
+    except Exception as e:
+        print("Index Doesn't Exist, running manual search", e)
         try:
             objects = list(iter_s3_objects(
                 bucket=bucket,
@@ -232,9 +233,12 @@ def edit_tags(data: TagRequest):
     meilisearch_url = os.getenv("MEILISEARCH_URL")
     meili_client = meilisearch.Client(meilisearch_url)
 
+    postgres_url = os.getenv("DATABASE_URL")
+    doc_id = get_doc_id(data.key)
+
+    # add tags to index
     try:
         index = meili_client.get_index(data.bucket)
-        doc_id = get_doc_id(data.key)
         index.update_documents([{
             "ID": doc_id,
             "Tags": data.tags
@@ -242,9 +246,22 @@ def edit_tags(data: TagRequest):
         #NOTE skip_creation=True not available in current version, 
         # we should update the meilisearch client when we get the change so that this function is not able to create new documents
 
-        #TODO Save tags to a database for persistence
-
     except Exception:
         raise HTTPException(
             status_code=500, detail="Error encountered while editing tags. Check that the meilisearch index and document exist.")
     
+    # store tags in db
+    try: 
+        with psycopg.connect(postgres_url) as conn:
+            with conn.cursor() as cur:
+                if len(data.tags) > 0:
+                    cur.execute("""INSERT INTO file_tags (hashed_key, bucket, tags) VALUES (%s, %s, %s) 
+                                ON CONFLICT (hashed_key) DO UPDATE SET tags = EXCLUDED.tags""", 
+                                (doc_id, data.bucket, data.tags))
+                else:
+                    cur.execute("""DELETE FROM file_tags WHERE hashed_key=%s""", (doc_id,))
+        
+    except Exception:
+        raise HTTPException(
+            status_code=500, detail="Error encountered while storing tags to database."
+        )

@@ -17,6 +17,9 @@
     e.stopPropagation();
     if (e.key === "Escape") {
       setEditing(null);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      addToLocal();
     }
   }
   function modalAction(node: HTMLElement) {
@@ -29,6 +32,13 @@
     return {
       destroy: () => returnFn.forEach((fn) => fn()),
     };
+  }
+  function addToLocal() {
+    localTags =
+      localTags.includes(tagInput) || tagInput === ""
+        ? localTags
+        : [...localTags, tagInput];
+    tagInput = "";
   }
 </script>
 
@@ -66,32 +76,26 @@
         </button>
       </div>
       <div class="py-4 px-8 flex flex-col items-left gap-4">
-        <div>Editing tags for: <br />{editing}</div>
-        <div
+        <div>
+          Editing tags for:
+          <div
+            class="overflow-x-auto border border-gray-300 rounded p-2 pb-3 bg-slate-50"
+          >
+            {editing}
+          </div>
+        </div>
+        <form
           class="flex items-center gap-2 text-nowrap"
-          on:submit|preventDefault={() => {
-            console.log("add tag");
-          }}
+          on:submit={addToLocal}
         >
           Enter Tags:
           <input
             class="w-full"
-            value={tagInput}
+            bind:value={tagInput}
             placeholder="mars-rover-2020"
-            on:change={(e) => (tagInput = e.currentTarget.value)}
           />
-          <button
-            type="submit"
-            class="button"
-            on:click|preventDefault={() => {
-              localTags =
-                localTags.includes(tagInput) || tagInput === ""
-                  ? localTags
-                  : [...localTags, tagInput];
-              tagInput = "";
-            }}>Add Tag</button
-          >
-        </div>
+          <button type="submit" class="button">Add Tag</button>
+        </form>
         {#if localTags.length > 0}
           <div
             class="w-full h-fit border border-gray-300 bg-slate-100 rounded-lg py-2 px-4 flex gap-2 flex-wrap"

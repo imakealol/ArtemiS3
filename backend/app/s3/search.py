@@ -242,7 +242,6 @@ def search_from_meili(bucket: str,
             "storage_class": document["StorageClass"],
             "tags": document["Tags"]
         })
-    print(objects[0])
     return objects
 
 

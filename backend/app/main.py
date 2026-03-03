@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import meilisearch
+import psycopg
 from typing import List, Optional
 from app.api.s3_routes import s3_router
 from app.s3.index_refresh import refresh_meili_index
@@ -20,6 +21,8 @@ app.add_middleware(
 
 meilisearch_url = os.getenv("MEILISEARCH_URL")
 meili_client = meilisearch.Client(meilisearch_url)
+
+postgres_url = os.getenv("DATABASE_URL")
 
 # routers for various API endpoint functionalities
 app.include_router(s3_router)
@@ -72,3 +75,14 @@ def test(name: str = "world") -> dict:
 def test() -> dict:
     health = meili_client.health()
     return {"status": health}
+
+@app.get("/api/postgres/test")
+def test() -> dict:
+    with psycopg.connect(postgres_url) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""SELECT table_name FROM information_schema.tables
+                WHERE table_schema = 'public'""")
+            tables = [table for table in cur.fetchall()]
+            cur.execute("""SELECT * FROM file_tags""")
+            records = [record for record in cur.fetchall()]
+    return {"tables": tables, "records": records}

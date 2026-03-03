@@ -8,6 +8,8 @@ from typing import List, Dict, Optional, Any
 import fitz
 import meilisearch
 import hashlib
+
+import psycopg
 from app.s3.refresh_status import (
     start_refresh,
     set_status,
@@ -26,6 +28,7 @@ from app.s3.utils import (
     build_subtree_filter
 )
 from app.schemas.meili_models import MeiliDocumentModel
+from app.schemas.pg_models import TagRecord
 
 
 # List of supported text file types for full-text indexing
@@ -188,7 +191,7 @@ def refresh_meili_index(bucket_name: str, prefix: Optional[str] = None, s3_uri: 
         raise
 
 
-def create_index(index: str, file, meili_client: meilisearch.Client, s3_uri: Optional[str] = None) -> None:
+def create_document(index: str, file, meili_client: meilisearch.Client, dbTags: dict[str, tuple], s3_uri: Optional[str] = None) -> None:
     s3 = get_public_client()
 
     # prefixing logic to handle folders
@@ -209,7 +212,7 @@ def create_index(index: str, file, meili_client: meilisearch.Client, s3_uri: Opt
     parent_path = key_parent_path(norm_key)
     ancestors = parent_ancestors(parent_path)
     depth = path_depth(parent_path)
-    tags = []  # TODO Read tags from database
+    tags = dbTags[hashed_key][2] if hashed_key in dbTags else []
     keywords = []
 
     if ctype in TEXT_CONTENT_TYPES:
@@ -242,9 +245,15 @@ def create_index(index: str, file, meili_client: meilisearch.Client, s3_uri: Opt
 def add_files_to_index(index: str, new_files: List, s3_uri: Optional[str] = None) -> None:
     meilisearch_url = os.getenv("MEILISEARCH_URL")
     meili_client = meilisearch.Client(meilisearch_url)
+    postgres_url = os.getenv("DATABASE_URL")
+
+    with psycopg.connect(postgres_url) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""SELECT * FROM file_tags WHERE bucket=%s""", (index,))
+            dbTags = {record[0]: record for record in cur.fetchall()}
 
     create_with_args = partial(
-        create_index, index, meili_client=meili_client, s3_uri=s3_uri)
+        create_document, index, meili_client=meili_client, dbTags=dbTags, s3_uri=s3_uri)
 
     with ThreadPoolExecutor(max_workers=5) as executor:
         executor.map(create_with_args, new_files)
@@ -253,12 +262,16 @@ def add_files_to_index(index: str, new_files: List, s3_uri: Optional[str] = None
 def remove_files_from_index(index: str, removed_keys: List[str], s3_uri: Optional[str] = None) -> None:
     meilisearch_url = os.getenv("MEILISEARCH_URL")
     meili_client = meilisearch.Client(meilisearch_url)
+    postgres_url = os.getenv("DATABASE_URL")
 
-    for key in removed_keys:
-        hashed_key = get_doc_id(key)
-        meili_client.index(index).delete_document(hashed_key)
-        if s3_uri is not None:
-            increment_processed(s3_uri, 1)
+    with psycopg.connect(postgres_url) as conn:
+        with conn.cursor() as cur:
+            for key in removed_keys:
+                hashed_key = get_doc_id(key)
+                meili_client.index(index).delete_document(hashed_key)
+                cur.execute("""DELETE FROM file_tags WHERE hashed_key=%s""", (hashed_key,))
+                if s3_uri is not None:
+                    increment_processed(s3_uri, 1)
 
 
 def get_keywords_from_key(key: str):
