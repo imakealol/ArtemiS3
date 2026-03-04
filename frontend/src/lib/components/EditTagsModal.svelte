@@ -86,7 +86,10 @@
         </div>
         <form
           class="flex items-center gap-2 text-nowrap"
-          on:submit={addToLocal}
+          on:submit={(e) => {
+            e.preventDefault();
+            addToLocal();
+          }}
         >
           Enter Tags:
           <input
