@@ -28,6 +28,11 @@
     ".webp",
     ".mp4",
     ".mp3",
+    ".xml",
+    ".lbl",
+    ".lab",
+    ".txt",
+    ".asc",
   ];
   const PAGE_SIZE: number = 10;
 
@@ -100,7 +105,7 @@
   <div class="min-h-[510px] flex flex-col justify-between">
     <table
       class="grid-table mt-4 w-full border-collapse text-sm"
-      style="grid-template-columns: auto max-content max-content max-content max-content 40px 40px 40px;"
+      style="grid-template-columns: 1fr repeat(4, max-content) 40px 40px 40px;"
     >
       <thead>
         <tr class="border-b bg-white">
@@ -217,8 +222,9 @@
           {#if previewUrl && previewKey === obj.key}
             <tr>
               <td
-                colspan="6"
+                colspan="8"
                 class="p-4 bg-gray-50 border-x border-b shadow-inner"
+                style="grid-column: span 8;"
               >
                 <div class="flex flex-col items-center justify-center w-full">
                   {#if obj.key.endsWith(".pdf")}
@@ -270,6 +276,45 @@
                       >
                         Open Full Resolution ↗
                       </a>
+                    </div>
+                  {:else if obj.key
+                    .toLowerCase()
+                    .match(/\.(xml|lbl|lab|asc|txt)$/)}
+                    <div
+                      class="w-full max-w-4xl bg-white border shadow-lg rounded-sm overflow-hidden"
+                    >
+                      <div
+                        class="bg-gray-100 px-4 py-2 border-b flex justify-between items-center"
+                      >
+                        <span class="text-xs font-mono text-gray-600"
+                          >{obj.key.split("/").pop()}</span
+                        >
+                        <span
+                          class="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded uppercase font-bold"
+                          >Text Preview</span
+                        >
+                      </div>
+
+                      <div class="p-4 overflow-auto max-h-[600px] bg-gray-50">
+                        {#await fetch(previewUrl).then((res) => res.text())}
+                          <div class="flex items-center justify-center py-10">
+                            <p
+                              class="text-sm text-gray-500 animate-pulse font-mono italic"
+                            >
+                              Reading file content...
+                            </p>
+                          </div>
+                        {:then content}
+                          <pre
+                            class="text-xs font-mono whitespace-pre-wrap break-all text-gray-800 leading-relaxed">{content}</pre>
+                        {:catch error}
+                          <div
+                            class="p-4 bg-red-50 text-red-700 text-xs rounded border border-red-200"
+                          >
+                            Failed to load text: {error.message}
+                          </div>
+                        {/await}
+                      </div>
                     </div>
                   {:else}
                     <div class="bg-white p-2 border shadow-lg rounded-sm">
@@ -352,4 +397,66 @@
       setEditing(null);
     }}
   />
+{/if}
+
+<tr class="bg-yellow-50 border-t-2 border-dashed border-yellow-200">
+  <td colspan="8" class="p-2 text-center">
+    <button
+      type="button"
+      on:click={() => {
+        previewKey = "test_sample_file.lab";
+        previewUrl =
+          "https://raw.githubusercontent.com/NASA-PDS/pds-api/master/README.md";
+      }}
+      class="text-[10px] uppercase font-bold text-yellow-700 hover:text-yellow-900"
+    >
+      ⚠️ Debug: Click to test .lab Preview UI
+    </button>
+  </td>
+</tr>
+
+{#if previewKey === "test_sample_file.lab"}
+  <tr>
+    <td
+      colspan="8"
+      class="p-4 bg-gray-50 border-x border-b shadow-inner"
+      style="grid-column: span 8;"
+    >
+      <div class="flex flex-col items-center justify-center w-full">
+        <div
+          class="w-full max-w-4xl bg-white border shadow-lg rounded-sm overflow-hidden text-left"
+        >
+          <div
+            class="bg-gray-100 px-4 py-2 border-b flex justify-between items-center"
+          >
+            <span class="text-xs font-mono text-gray-600">{previewKey}</span>
+            <span
+              class="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded uppercase font-bold"
+              >Text Preview</span
+            >
+          </div>
+          <div class="p-4 overflow-auto max-h-[600px] bg-gray-50">
+            {#await fetch(previewUrl).then((res) => res.text())}
+              <p class="text-sm text-gray-500 animate-pulse font-mono italic">
+                Reading test file...
+              </p>
+            {:then content}
+              <pre
+                class="text-xs font-mono whitespace-pre-wrap break-all text-gray-800 leading-relaxed">{content}</pre>
+            {/await}
+          </div>
+        </div>
+
+        <button
+          on:click={() => {
+            previewUrl = null;
+            previewKey = null;
+          }}
+          class="mt-4 text-xs text-gray-400 hover:text-red-500 uppercase tracking-widest font-bold"
+        >
+          [ Close Test Preview ]
+        </button>
+      </div>
+    </td>
+  </tr>
 {/if}
