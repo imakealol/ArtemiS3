@@ -84,6 +84,39 @@
     dropdownOpen = !dropdownOpen;
   }
 
+  function formatDisplayNumber(value: number): string {
+    const rounded = Math.round(value * 1000) / 1000;
+    return Number.isInteger(rounded) ? String(rounded) : String(rounded);
+  }
+
+  function bytesToInputAndUnit(
+    bytes?: number,
+    preferredUnit?: number,
+  ): { input: string; unit: number } {
+    if (typeof bytes !== "number" || Number.isNaN(bytes)) {
+      return { input: "", unit: 1 };
+    }
+
+    if (preferredUnit && preferredUnit > 0) {
+      return {
+        input: formatDisplayNumber(bytes / preferredUnit),
+        unit: preferredUnit,
+      };
+    }
+
+    for (let i = unitConversion.length - 1; i >= 0; i--) {
+      const unit = unitConversion[i].value;
+      const scaled = bytes / unit;
+
+      // Prefer larger units when the displayed value stays readable.
+      if (scaled >= 1) {
+        return { input: formatDisplayNumber(scaled), unit };
+      }
+    }
+
+    return { input: String(bytes), unit: 1 };
+  }
+
   $: {
     selectedTypes;
     minSizeInput;
@@ -103,8 +136,18 @@
     lastInitialFilters = initialFilters;
 
     selectedTypes = initialFilters.suffixes ?? [];
-    minSizeInput = initialFilters.minSize ? String(initialFilters.minSize) : "";
-    maxSizeInput = initialFilters.maxSize ? String(initialFilters.maxSize) : "";
+    const minDisplay = bytesToInputAndUnit(
+      initialFilters.minSize,
+      dropdownOpen ? minUnit : undefined,
+    );
+    minSizeInput = minDisplay.input;
+    minUnit = minDisplay.unit;
+    const maxDisplay = bytesToInputAndUnit(
+      initialFilters.maxSize,
+      dropdownOpen ? maxUnit : undefined,
+    );
+    maxSizeInput = maxDisplay.input;
+    maxUnit = maxDisplay.unit;
     selectedStorageClasses = initialFilters.storageClasses ?? [];
 
     if (initialFilters.modifiedAfter) {
@@ -186,8 +229,12 @@
 
   function applySavedFilter(filter: any) {
     selectedTypes = filter.suffixes ?? [];
-    minSizeInput = filter.minSize ? String(filter.minSize) : "";
-    maxSizeInput = filter.maxSize ? String(filter.maxSize) : "";
+    const minDisplay = bytesToInputAndUnit(filter.minSize);
+    minSizeInput = minDisplay.input;
+    minUnit = minDisplay.unit;
+    const maxDisplay = bytesToInputAndUnit(filter.maxSize);
+    maxSizeInput = maxDisplay.input;
+    maxUnit = maxDisplay.unit;
     selectedStorageClasses = filter.storageClasses ?? [];
     if (filter.modifiedAfter) {
       dateValue = filter.modifiedAfter;

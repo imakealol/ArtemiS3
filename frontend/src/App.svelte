@@ -8,7 +8,9 @@
       class="mx-auto flex w-full max-w-[1600px] items-center justify-between px-6 py-4 md:px-10"
     >
       <h1 class="text-3xl font-extrabold leading-none tracking-tight md:text-4xl">
-        <span>Artemi</span><span class="text-amber-400">S3</span>
+        <a href="/" class="inline-block text-inherit no-underline">
+          <span>Artemi</span><span class="text-amber-400">S3</span>
+        </a>
       </h1>
       <nav class="flex items-center gap-6 text-base font-bold tracking-wide md:text-xl">
         <a href="#" class="text-slate-100/90 transition hover:text-amber-300">[Docs]</a>
