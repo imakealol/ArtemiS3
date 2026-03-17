@@ -1,36 +1,100 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700;800&display=swap");
 @import "tailwindcss";
 
-h1 {
-  @apply text-4xl font-bold;
-}
-h2 {
-  @apply text-2xl font-bold;
-}
-h3 {
-  @apply text-xl;
+:root {
+  --art-bg-0: #020812;
+  --art-bg-1: #061223;
+  --art-bg-2: #091a31;
+  --art-surface-0: #081321;
+  --art-surface-1: #0e1e35;
+  --art-surface-2: #142744;
+  --art-border: rgba(148, 163, 184, 0.45);
+  --art-text: #e5ecf5;
+  --art-muted: #a7b4c6;
+  --art-accent: #f59e0b;
+  --art-accent-2: #fbbf24;
 }
 
-/* apply as class instead of to all buttons for more freedom with button style */
+html,
+body,
+#app {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--art-text);
+  font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at 15% 0%, #15305a 0%, rgba(4, 10, 18, 0.9) 38%),
+    radial-gradient(circle at 85% 10%, #112847 0%, rgba(4, 10, 18, 0.8) 32%),
+    linear-gradient(180deg, var(--art-bg-1) 0%, var(--art-bg-0) 55%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.mono {
+  font-family: "IBM Plex Mono", "Cascadia Mono", "Consolas", monospace;
+}
+
+.art-bracket {
+  @apply inline-flex items-center gap-2;
+}
+
+.art-bracket::before,
+.art-bracket::after {
+  @apply text-slate-300/75;
+  content: "[";
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.art-bracket::after {
+  content: "]";
+}
+
 .button {
-  @apply px-2 py-1 border border-gray-600 outline-gray-800 hover:border-gray-400
-         hover:outline hover:shadow rounded-lg cursor-pointer bg-gray-100 active:bg-gray-200
-         disabled:border-gray-500 disabled:hover:outline-none disabled:active:bg-gray-100;
-}
-
-input {
-  @apply px-2 py-1 border border-gray-400 rounded-lg
-         bg-gray-100 focus:outline-1 focus:outline-gray-600;
-}
-.checkbox {
-  @apply appearance-auto hover:shadow size-4 focus:outline-none text-white;
-}
-
-.expandable {
-  @apply px-2 py-1 border border-gray-400 min-w-20 flex items-center
-         justify-between gap-1 shadow active:bg-gray-200 cursor-pointer;
+  @apply inline-flex items-center justify-center rounded-md border border-amber-300/50 bg-amber-500 px-3 py-1.5 text-sm font-semibold text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-55;
 }
 
 .page-button {
-  @apply cursor-pointer px-2 aspect-square border-y border-gray-300 active:bg-gray-200
-              disabled:cursor-default disabled:bg-gray-300 disabled:text-gray-500 hover:bg-gray-100
+  @apply inline-flex h-9 w-9 items-center justify-center border border-slate-500/40 bg-slate-900/60 text-slate-200 transition hover:bg-slate-800/70 disabled:cursor-not-allowed disabled:opacity-45;
+}
+
+.icon-button {
+  @apply inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-300 transition hover:bg-slate-700/50 hover:text-amber-300 disabled:cursor-not-allowed disabled:text-slate-500;
+}
+
+@keyframes art-fade-up {
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes art-soft-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.art-fade-up {
+  animation: art-fade-up 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.art-fade-up-delayed {
+  animation: art-fade-up 520ms cubic-bezier(0.2, 0.8, 0.2, 1) 80ms both;
+}
+
+.art-soft-in {
+  animation: art-soft-in 320ms ease-out both;
 }

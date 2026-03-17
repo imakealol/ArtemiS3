@@ -1,14 +1,25 @@
 <script lang="ts">
   import { Search as SearchIcon } from "@lucide/svelte";
-  import { searchS3 } from "../api/s3";
-  import { type S3ObjectModel, type S3SearchRequest } from "../schemas/s3";
+  import {
+    searchS3,
+    searchS3Folders,
+    searchS3FolderChildren,
+    editObjectTags,
+  } from "../api/s3";
+  import type {
+    S3FolderChildrenResponse,
+    S3FolderModel,
+    S3ObjectModel,
+    S3SearchRequest,
+  } from "../schemas/s3";
+  import { onDestroy, onMount } from "svelte";
   import FilterPanel from "../components/FilterPanel.svelte";
-  import S3ResultsTable from "../components/S3ResultsTable.svelte";
+  import S3FolderExplorer from "../components/S3FolderExplorer.svelte";
   import S3IndexRefreshProgress from "./S3IndexRefreshProgress.svelte";
+  import S3ResultsTable from "../components/S3ResultsTable.svelte";
 
   export let className = "";
 
-  // expand as more buckets are available (maybe we can make this dynamic?)
   const s3UriOptions = [
     "s3://asc-pds-services",
     "s3://asc-pds-services/pigpen",
@@ -27,9 +38,26 @@
   let s3Loading = false;
   let s3Error: string | null = null;
   let s3Results: S3ObjectModel[] = [];
+  let viewMode: "file" | "folder" = "file";
 
-  let sort_by: "Key" | "Size" | "LastModified" | undefined = undefined;
-  let sort_direction: "asc" | "desc" = "asc";
+  let folderSuggestions: S3FolderModel[] = [];
+  let folderChildren: S3FolderModel[] = [];
+  let folderBreadcrumbs: S3FolderChildrenResponse["breadcrumbs"] = [];
+  let activeFolderPath = "";
+  let folderFiles: S3ObjectModel[] = [];
+
+  let sortBy: "Key" | "Size" | "LastModified" | undefined = undefined;
+  let sortDirection: "asc" | "desc" = "asc";
+  let hasSearched = false;
+
+  const QUERY_KEY = "artemis_recent_queries";
+  const FILTER_KEY = "artemis_saved_filter_presets";
+  const MAX_QUERIES = 10;
+
+  let recentQueries: string[] = [];
+  let showQueryDropdown = false;
+  let dropdownContainer: HTMLDivElement;
+  let filterPanelRef: any;
 
   type FilterState = {
     suffixes?: string[];
@@ -39,16 +67,23 @@
     modifiedAfter?: string;
     modifiedBefore?: string;
   };
-  let s3Filters: FilterState = {};
+
+  type FilterPreset = {
+    name: string;
+    filters: FilterState;
+  };
 
   type FilterPanelPayload = {
-    selectedTypes: string[]; // file types
+    selectedTypes: string[];
     minSize?: number;
     maxSize?: number;
     storageClasses?: string[];
-    date?: string; // YYYY-MM-DD
+    date?: string;
     condition?: "after" | "before" | "";
   };
+
+  let s3Filters: FilterState = {};
+  let savedFilterPresets: FilterPreset[] = [];
 
   function handleS3OptionChange(value: string) {
     if (value === "custom") {
@@ -56,6 +91,7 @@
     } else {
       s3Uri = value;
     }
+    resetFolderState();
   }
 
   function handleCustomS3UriInput(value: string) {
@@ -63,9 +99,27 @@
     if (selectedS3Bucket === "custom") {
       s3Uri = customS3Uri;
     }
+    resetFolderState();
   }
 
-  let hasSearched = false;
+  function resetFolderState() {
+    folderSuggestions = [];
+    folderChildren = [];
+    folderBreadcrumbs = [];
+    activeFolderPath = "";
+    folderFiles = [];
+  }
+
+  function setViewMode(mode: string) {
+    if (mode !== "file" && mode !== "folder") return;
+    if (viewMode === mode) return;
+
+    viewMode = mode;
+    hasSearched = false;
+    s3Error = null;
+    resetFolderState();
+  }
+
   async function runS3Search() {
     s3Loading = true;
     s3Error = null;
@@ -81,12 +135,12 @@
         storageClasses: s3Filters.storageClasses,
         modifiedAfter: s3Filters.modifiedAfter,
         modifiedBefore: s3Filters.modifiedBefore,
-        sort_by,
-        sort_direction,
+        sortBy,
+        sortDirection,
       };
-
       hasSearched = true;
       s3Results = await searchS3(request);
+      saveQuery(s3Contains);
     } catch (err) {
       s3Error = err instanceof Error ? err.message : "Unknown S3 error";
       s3Results = [];
@@ -96,22 +150,77 @@
     }
   }
 
-  function handleSort(column: "Key" | "Size" | "LastModified") {
-    if (!column) return;
-
-    // toggle if same column
-    if (sort_by === column) {
-      sort_direction = sort_direction === "asc" ? "desc" : "asc";
-    } else {
-      sort_by = column;
-      // default first click direction for all columns
-      sort_direction = "desc";
-    }
-
-    runS3Search();
+  async function loadFolderChildren(path?: string) {
+    const data = await searchS3FolderChildren({
+      s3Uri,
+      path: path || undefined,
+      contains: s3Contains || undefined,
+      limit: s3Limit,
+      sortBy,
+      sortDirection,
+    });
+    activeFolderPath = data.path;
+    folderBreadcrumbs = data.breadcrumbs;
+    folderChildren = data.children;
+    folderFiles = data.files ?? [];
   }
 
-  // calls on apply from FilterPanel
+  async function runFolderSearch() {
+    s3Loading = true;
+    s3Error = null;
+
+    try {
+      hasSearched = true;
+      saveQuery(s3Contains);
+      folderSuggestions = await searchS3Folders({
+        s3Uri,
+        contains: s3Contains || undefined,
+        limit: s3Limit,
+      });
+
+      if (folderSuggestions.length > 0) {
+        await loadFolderChildren(folderSuggestions[0].path);
+      } else {
+        folderChildren = [];
+        folderBreadcrumbs = [];
+        activeFolderPath = "";
+        folderFiles = [];
+      }
+    } catch (err) {
+      s3Error =
+        err instanceof Error ? err.message : "Unknown folder search error";
+      resetFolderState();
+      console.error("S3 folder search failed:", err);
+    } finally {
+      s3Loading = false;
+    }
+  }
+
+  async function runSearchByMode() {
+    if (viewMode === "folder") {
+      await runFolderSearch();
+      return;
+    }
+    await runS3Search();
+  }
+
+  async function handleSort(column: "Key" | "Size" | "LastModified") {
+    if (!column) return;
+
+    if (sortBy === column) {
+      sortDirection = sortDirection === "asc" ? "desc" : "asc";
+    } else {
+      sortBy = column;
+      sortDirection = "desc";
+    }
+
+    if (viewMode === "folder") {
+      await loadFolderChildren(activeFolderPath || undefined);
+      return;
+    }
+    await runS3Search();
+  }
+
   async function handleFilterApply(payload: FilterPanelPayload) {
     const next: FilterState = {};
 
@@ -131,16 +240,15 @@
       next.storageClasses = payload.storageClasses;
     }
 
-    if (payload.date && payload.condition == "after") {
+    if (payload.date && payload.condition === "after") {
       next.modifiedAfter = payload.date;
-    } else if (payload.date && payload.condition == "before") {
+    } else if (payload.date && payload.condition === "before") {
       next.modifiedBefore = payload.date;
     }
 
     s3Filters = next;
 
-    // rerun search when filters are applied
-    if (s3Uri) {
+    if (s3Uri && viewMode === "file") {
       await runS3Search();
     }
   }
@@ -154,101 +262,294 @@
     const bucket = getBucketFromUri(s3Uri);
     const fileUri = `s3://${bucket}/${key}`;
     const url = `/api/s3/download?s3_uri=${encodeURIComponent(fileUri)}`;
-
-    // trigger browser download
     window.location.href = url;
   }
+
+  async function openFolder(path: string) {
+    await loadFolderChildren(path);
+  }
+
+  async function openBreadcrumb(path: string) {
+    await loadFolderChildren(path || undefined);
+  }
+
+  async function navigateUp() {
+    if (!activeFolderPath) return;
+    const segments = activeFolderPath.split("/").filter(Boolean);
+    segments.pop();
+    const parentPath = segments.join("/");
+    await loadFolderChildren(parentPath || undefined);
+  }
+
+  async function editTags(key: string, tags: string[]) {
+    const bucket = getBucketFromUri(s3Uri);
+    await editObjectTags(bucket, key, tags);
+  }
+
+  onMount(() => {
+    if (typeof window === "undefined") return;
+
+    const storedQueries = localStorage.getItem(QUERY_KEY);
+    if (storedQueries) {
+      recentQueries = JSON.parse(storedQueries);
+    }
+
+    const storedFilters = localStorage.getItem(FILTER_KEY);
+    if (storedFilters) {
+      savedFilterPresets = JSON.parse(storedFilters);
+    }
+
+    document.addEventListener("click", handleClickOutside);
+  });
+
+  function saveQuery(query: string) {
+    if (!query) return;
+
+    const filtered = recentQueries.filter((q) => q !== query);
+    recentQueries = [query, ...filtered].slice(0, MAX_QUERIES);
+
+    localStorage.setItem(QUERY_KEY, JSON.stringify(recentQueries));
+  }
+
+  function deleteQuery(queryToDelete: string) {
+    recentQueries = recentQueries.filter((q) => q !== queryToDelete);
+    localStorage.setItem(QUERY_KEY, JSON.stringify(recentQueries));
+  }
+
+  function saveCurrentFiltersAsPreset() {
+    const current = filterPanelRef.getCurrentFilters();
+
+    const name = prompt("Preset name?");
+    if (!name) return;
+
+    const existingIndex = savedFilterPresets.findIndex((f) => f.name === name);
+
+    if (existingIndex !== -1) {
+      const overwrite = confirm(
+        `A filter named "${name}" already exists. Do you want to overwrite it?`,
+      );
+      if (!overwrite) return;
+      savedFilterPresets[existingIndex] = { name, filters: current };
+    } else {
+      savedFilterPresets = [...savedFilterPresets, { name, filters: current }];
+    }
+
+    localStorage.setItem(FILTER_KEY, JSON.stringify(savedFilterPresets));
+  }
+
+  function handleClickOutside(event: MouseEvent) {
+    if (!dropdownContainer) return;
+    if (!dropdownContainer.contains(event.target as Node)) {
+      showQueryDropdown = false;
+    }
+  }
+
+  function deleteFilterPreset(name: string) {
+    savedFilterPresets = savedFilterPresets.filter((f) => f.name !== name);
+    localStorage.setItem(FILTER_KEY, JSON.stringify(savedFilterPresets));
+  }
+
+  onDestroy(() => {
+    document.removeEventListener("click", handleClickOutside);
+  });
 </script>
 
-<section class={`border rounded p-4 bg-white ${className}`}>
-  <h2 class="text-xl font-semibold mb-3">Enter your search:</h2>
+<section
+  class={`art-fade-up relative overflow-visible border border-slate-300/55 bg-slate-950/55 shadow-[0_40px_90px_rgba(2,10,18,0.55)] ${className}`}
+>
+  <div class="relative z-20 mx-auto w-full max-w-[1000px] px-4 py-8 md:px-8 md:py-10">
+    <h2 class="mb-8 text-3xl font-bold tracking-tight md:text-4xl">
+      Search <span class="text-amber-400">S3</span> Bucket
+    </h2>
 
-  <form
-    class="flex flex-wrap gap-3 items-end"
-    on:submit|preventDefault={runS3Search}
-  >
-    <FilterPanel onApply={handleFilterApply} />
-    <div class="flex flex-col">
-      <label for="s3Uri" class="text-sm font-medium mb-1">S3 URI</label>
-      <select
-        id="s3Uri"
-        bind:value={selectedS3Bucket}
-        placeholder="s3://bucket/prefix"
-        class="border rounded p-2 w-72"
-        on:change={(e) => handleS3OptionChange(e.currentTarget.value)}
-        required
-      >
-        {#each s3UriOptions as option}
-          <option value={option}>
-            {option === "custom" ? "Custom..." : option}
-          </option>
-        {/each}
-      </select>
+    <form class="space-y-7" on:submit|preventDefault={runSearchByMode}>
+      <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+        <div class="flex flex-col gap-2">
+          <label for="s3Uri" class="text-sm font-semibold tracking-wide text-slate-300">
+            S3 URI
+          </label>
+          <div
+            class="art-bracket rounded-md border border-slate-400/45 bg-slate-900/65 px-3 py-2 shadow-[0_0_0_1px_rgba(15,23,42,0.4)]"
+          >
+            <select
+              id="s3Uri"
+              bind:value={selectedS3Bucket}
+              class="w-full appearance-none bg-transparent text-lg font-semibold text-slate-100 outline-none"
+              on:change={(e) =>
+                handleS3OptionChange((e.currentTarget as HTMLSelectElement).value)}
+              required
+            >
+              {#each s3UriOptions as option}
+                <option class="bg-slate-900 text-slate-100" value={option}>
+                  {option === "custom" ? "Custom..." : option}
+                </option>
+              {/each}
+            </select>
+          </div>
 
-      {#if selectedS3Bucket === "custom"}
-        <input
-          type="text"
-          placeholder="s3://bucket/prefix"
-          class="border rounded p-2 w-72 mt-2"
-          value={customS3Uri}
-          on:input={(e) => handleCustomS3UriInput(e.currentTarget.value)}
-          required
-        />
-      {/if}
-    </div>
+          {#if selectedS3Bucket === "custom"}
+            <div
+              class="art-bracket rounded-md border border-slate-400/45 bg-slate-900/65 px-3 py-2 shadow-[0_0_0_1px_rgba(15,23,42,0.4)]"
+            >
+              <input
+                type="text"
+                placeholder="s3://bucket/prefix"
+                class="w-full border-none bg-transparent text-base text-slate-100 outline-none"
+                value={customS3Uri}
+                on:input={(e) =>
+                  handleCustomS3UriInput((e.currentTarget as HTMLInputElement).value)}
+                required
+              />
+            </div>
+          {/if}
+        </div>
+        <S3IndexRefreshProgress {s3Uri} />
+      </div>
 
-    <S3IndexRefreshProgress {s3Uri} />
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <div class="flex flex-wrap items-center gap-3 text-base">
+          <span class="text-base font-semibold text-slate-200">Mode:</span>
+          <button
+            type="button"
+            class={`art-bracket rounded-md border px-2 py-1 text-base transition ${
+              viewMode === "file"
+                ? "border-amber-300/65 bg-amber-400/20 text-amber-200"
+                : "border-slate-400/50 bg-slate-900/60 text-slate-200 hover:bg-slate-800/70"
+            }`}
+            on:click={() => setViewMode("file")}
+          >
+            File
+          </button>
+          <button
+            type="button"
+            class={`art-bracket rounded-md border px-2 py-1 text-base transition ${
+              viewMode === "folder"
+                ? "border-amber-300/65 bg-amber-400/20 text-amber-200"
+                : "border-slate-400/50 bg-slate-900/60 text-slate-200 hover:bg-slate-800/70"
+            }`}
+            on:click={() => setViewMode("folder")}
+          >
+            Folder
+          </button>
+        </div>
 
-    <div class="flex flex-col">
-      <label for="s3Contains" class="text-sm font-medium mb-1">
-        Contains
-      </label>
-      <input
-        id="s3Contains"
-        type="text"
-        bind:value={s3Contains}
-        placeholder="optional substring filter"
-        class="border rounded p-2 w-48"
+        <div class="flex flex-wrap items-center gap-3">
+          {#if viewMode === "file"}
+            <FilterPanel
+              bind:this={filterPanelRef}
+              initialFilters={s3Filters}
+              onApply={handleFilterApply}
+              savedFilters={savedFilterPresets}
+              onSave={saveCurrentFiltersAsPreset}
+              onDelete={deleteFilterPreset}
+            />
+          {/if}
+          <label for="s3Limit" class="text-base font-semibold text-slate-200">Limit:</label>
+          <div class="art-bracket rounded-md border border-slate-400/50 bg-slate-900/65 px-2 py-1">
+            <input
+              id="s3Limit"
+              type="number"
+              min="1"
+              max="1000"
+              bind:value={s3Limit}
+              class="w-20 border-none bg-transparent text-right text-lg text-slate-100 outline-none"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div class="flex flex-col items-center gap-3 md:flex-row md:justify-center">
+        <div class="relative w-full max-w-md" bind:this={dropdownContainer}>
+          <div
+            class="art-bracket w-full rounded-md border border-slate-400/50 bg-slate-900/65 px-3 py-2"
+          >
+            <input
+              id="s3Contains"
+              type="text"
+              bind:value={s3Contains}
+              placeholder="Search ArtemiS3..."
+              class="w-full border-none bg-transparent text-xl text-slate-100 outline-none md:text-2xl"
+              autocomplete="off"
+              on:focus={() => (showQueryDropdown = true)}
+            />
+          </div>
+
+          {#if showQueryDropdown && recentQueries.length > 0}
+            <div
+              class="absolute left-0 right-0 top-full z-20 mt-1 max-h-52 overflow-y-auto rounded-md border border-slate-500/50 bg-slate-900/95 p-1 shadow-2xl"
+            >
+              {#each recentQueries.filter((q) => q.toLowerCase().includes(s3Contains.toLowerCase())) as query}
+                <div class="flex items-center justify-between rounded px-2 hover:bg-slate-800/80">
+                  <button
+                    type="button"
+                    class="w-full py-1.5 text-left text-sm text-slate-200"
+                    on:click={async () => {
+                      s3Contains = query;
+                      await runSearchByMode();
+                      showQueryDropdown = false;
+                    }}
+                  >
+                    {query}
+                  </button>
+                  <button
+                    type="button"
+                    class="px-2 text-xs font-semibold text-slate-400 transition hover:text-rose-300"
+                    on:click={() => deleteQuery(query)}
+                  >
+                    x
+                  </button>
+                </div>
+              {/each}
+            </div>
+          {/if}
+        </div>
+
+        <button
+          type="submit"
+          class="art-bracket inline-flex items-center gap-2 rounded-md border border-slate-300/70 bg-slate-900/70 px-3 py-2 text-lg font-bold text-slate-100 transition hover:border-amber-300/65 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-65 md:text-xl"
+          disabled={s3Loading}
+        >
+          <SearchIcon class="h-4 w-4 md:h-5 md:w-5" />
+          {s3Loading ? "Searching" : "Run Search"}
+        </button>
+      </div>
+    </form>
+
+    {#if s3Error}
+      <p class="mt-4 text-sm text-rose-300">{s3Error}</p>
+    {/if}
+  </div>
+
+  <div class="relative z-0 art-fade-up-delayed border-t border-slate-300/65 px-4 py-4 md:px-8 md:py-6">
+    {#if viewMode === "file"}
+      <S3ResultsTable
+        {s3Uri}
+        items={s3Results}
+        searchedYet={hasSearched}
+        onDownload={handleDownload}
+        onSort={handleSort}
+        {sortBy}
+        {sortDirection}
+        {editTags}
       />
-    </div>
-
-    <div class="flex flex-col">
-      <label for="s3Limit" class="text-sm font-medium mb-1">Limit</label>
-      <input
-        id="s3Limit"
-        type="number"
-        min="1"
-        max="1000"
-        bind:value={s3Limit}
-        class="border rounded p-2 w-24"
+    {:else}
+      <S3FolderExplorer
+        searchedYet={hasSearched}
+        loading={s3Loading}
+        suggestions={folderSuggestions}
+        children={folderChildren}
+        files={folderFiles}
+        breadcrumbs={folderBreadcrumbs}
+        activePath={activeFolderPath}
+        {s3Uri}
+        {sortBy}
+        {sortDirection}
+        onOpenFolder={openFolder}
+        onOpenBreadcrumb={openBreadcrumb}
+        onNavigateUp={navigateUp}
+        onSort={handleSort}
+        onDownload={handleDownload}
       />
-    </div>
-
-    <button
-      type="submit"
-      class="flex items-center gap-2 bg-blue-600 text-white px-3 py-2 rounded disabled:opacity-60"
-      disabled={s3Loading}
-    >
-      <SearchIcon class="w-4 h-4" />
-      {#if s3Loading}
-        Searching
-      {:else}
-        Run S3 search
-      {/if}
-    </button>
-  </form>
-
-  {#if s3Error}
-    <p class="mt-3 text-red-600">{s3Error}</p>
-  {/if}
-
-  <S3ResultsTable
-    {s3Uri}
-    items={s3Results}
-    searchedYet={hasSearched}
-    onDownload={handleDownload}
-    onSort={handleSort}
-    {sort_by}
-    {sort_direction}
-  />
+    {/if}
+  </div>
 </section>

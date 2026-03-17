@@ -59,31 +59,31 @@
 
 {#if s3Uri}
   {#if status.status === "listing"}
-    <div class="mt-2 w-full">
-      <div class="text-sm text-gray-600 mb-1">
-        Scanning S3 objects...
+    <div class="w-full max-w-xs">
+      <div class="mb-1 text-xs font-medium tracking-wide text-slate-300/90">
+        Index status: scanning objects
         {#if status.listed !== null}
-          {status.listed} found
+          ({status.listed} found)
         {/if}
       </div>
-      <div class="h-2 bg-gray-200 rounded overflow-hidden">
-        <div class="h-2 bg-blue-600 animate-pulse w-full"></div>
+      <div class="h-2 overflow-hidden rounded bg-slate-800/80">
+        <div class="h-2 w-full animate-pulse bg-amber-400/80"></div>
       </div>
     </div>
   {:else if status.status === "running"}
-    <div class="mt-2 w-full">
-      <div class="text-sm text-gray-600 mb-1">
+    <div class="w-full max-w-xs">
+      <div class="mb-1 text-xs font-medium tracking-wide text-slate-300/90">
         Refreshing index: {status.processed}/{status.total} ({status.percent}%)
       </div>
-      <div class="h-2 bg-gray-200 rounded">
+      <div class="h-2 rounded bg-slate-800/80">
         <div
-          class="h-2 bg-blue-600 rounded"
+          class="h-2 rounded bg-amber-400"
           style={`width: ${status.percent}%`}
         ></div>
       </div>
     </div>
   {:else if status.status === "error"}
-    <div class="mt-2 text-sm text-red-600">
+    <div class="text-xs text-rose-300">
       Refresh error: {error || "Unknown error occurred"}
     </div>
   {/if}

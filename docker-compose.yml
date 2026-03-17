@@ -42,8 +42,10 @@ services:
       - ./backend:/app
     depends_on:
       - meilisearch
+      - postgres
     environment:
       - MEILISEARCH_URL=http://meilisearch:7700
+      - DATABASE_URL=postgresql://a3_admin:db_password@postgres:5432/artemis3
     networks:
       - net
 
@@ -59,6 +61,21 @@ services:
       - MEILI_HTTP_ADDR=0.0.0.0:7700
     networks:
       - net
+      
+  postgres:
+    image: postgres
+    container_name: postgres
+    environment:
+      - POSTGRES_USER=a3_admin
+      - POSTGRES_PASSWORD=db_password
+      - POSTGRES_DB=artemis3
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/postgresql
+      - ./initdb:/docker-entrypoint-initdb.d
+    networks:
+      - net
 
 networks:
   net:
@@ -66,3 +83,4 @@ networks:
 
 volumes:
   meilisearch:
+  postgres_data:
