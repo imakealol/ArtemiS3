@@ -29,11 +29,12 @@ from app.s3.utils import (
 )
 from app.schemas.meili_models import MeiliDocumentModel
 from app.schemas.pg_models import TagRecord
+from app.meilisearch.util import get_all_documents, get_all_indexes, get_doc_id, guess_mime_type
 
 
 # List of supported text file types for full-text indexing
 TEXT_CONTENT_TYPES = ["text/plain", "text/css", "text/csv", "text/xml", "application/xml"
-                      "text/html", "text/markdown", "application/json"]
+                      "text/html", "text/markdown", "application/json", "text/lbl", "text/lab"]
 # Keyword parsing separation characters
 SEPARATION_CHARACTERS = ["/", ",", "_", "-", " ", ".", "\n",
                          ":", "\\", "(", ")", "[", "]", "=", ";", "—", "*", "\""]
@@ -215,6 +216,9 @@ def create_document(index: str, file, meili_client: meilisearch.Client, dbTags: 
     tags = dbTags[hashed_key][2] if hashed_key in dbTags else []
     keywords = []
 
+    if ctype == "binary/octet-stream":
+        ctype = guess_mime_type(norm_key.split(".")[-1])
+
     if ctype in TEXT_CONTENT_TYPES:
         keywords = get_keywords_from_text(index, raw_key)
     elif ctype == "application/pdf":
@@ -315,59 +319,6 @@ def get_keywords_from_pdf(index: str, key: str):
         print(f"Error extracting text content from {key}: {e}")
         keywords = get_keywords_from_key(key)
     return keywords[:500]
-
-
-# TODO: move meilisearch utility functions to their own file
-def get_doc_id(key: str):
-    hash_object = hashlib.sha256(key.encode())
-    hex_dig = hash_object.hexdigest()
-    return (f"{hex_dig}")
-
-
-def get_all_indexes():
-    meilisearch_url = os.getenv("MEILISEARCH_URL")
-    meili_client = meilisearch.Client(meilisearch_url)
-
-    limit = 20
-    offset = 0
-    total: int | None = None
-    indexObjs = []
-    while total is None or offset < total:
-        temp = meili_client.get_raw_indexes({"limit": limit, "offset": offset})
-        if total is None:
-            total = temp["total"]
-        offset += limit
-        indexObjs.extend(temp["results"])
-
-    return indexObjs
-
-
-def get_all_documents(index: str, prefix: Optional[str] = None):
-    meilisearch_url = os.getenv("MEILISEARCH_URL")
-    meili_client = meilisearch.Client(meilisearch_url)
-
-    limit = 100
-    offset = 0
-    total: int | None = None
-    documentObjs = []
-
-    while total is None or offset < total:
-        get_query = {
-            "fields": ["Key"],
-            "limit": limit,
-            "offset": offset
-        }
-        if prefix is not None and prefix != "":
-            norm_prefix = normalize_s3_path(prefix)
-            get_query["filter"] = build_subtree_filter(norm_prefix)
-
-        temp = meili_client.index(index).get_documents(get_query)
-        if total is None:
-            total = temp.total
-        offset += limit
-        documentObjs.extend(temp.results)
-
-    return documentObjs
 
 
 if __name__ == "__main__":

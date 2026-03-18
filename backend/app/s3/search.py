@@ -12,6 +12,7 @@ from app.s3.utils import (
     path_depth,
     build_subtree_filter
 )
+from app.meilisearch.util import guess_mime_type
 
 
 def _facet_map(result: Dict[str, Any], facet_name: str) -> Dict[str, int]:
@@ -204,9 +205,9 @@ def search_from_meili(bucket: str,
         content_types = {ctype
                          for suffix in suffixes
                          if suffix is not None
-                         for ctype in [mimetypes.guess_type(f"f.{suffix}", False)[0]]
+                         for ctype in [guess_mime_type(suffix)]
                          if ctype}
-
+        print(content_types)
         if len(content_types) == 1:
             only_type = next(iter(content_types))
             filter_arr.append(f"ContentType='{only_type}'")
