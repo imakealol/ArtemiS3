@@ -21,10 +21,8 @@ from app.s3.utils import (
     key_filename,
     parent_ancestors,
     path_depth,
-    build_subtree_filter
 )
 from app.schemas.meili_models import MeiliDocumentModel
-from app.schemas.pg_models import TagRecord
 from app.meilisearch.util import get_all_documents, get_all_indexes, get_doc_id, guess_mime_type
 
 
