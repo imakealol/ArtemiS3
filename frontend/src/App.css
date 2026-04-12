@@ -64,7 +64,7 @@ body {
 }
 
 .icon-button {
-  @apply inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-300 transition hover:bg-slate-700/50 hover:text-amber-300 disabled:cursor-not-allowed disabled:text-slate-500;
+  @apply inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-300 cursor-pointer transition hover:bg-slate-700/50 hover:text-amber-300 disabled:cursor-not-allowed disabled:text-slate-500;
 }
 
 @keyframes art-fade-up {
