@@ -286,18 +286,46 @@
     await editObjectTags(bucket, key, tags);
   }
 
+  function parseStoredJson(raw: string | null): unknown {
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch (err) {
+      console.warn("Skipping invalid localStorage value:", err);
+      return null;
+    }
+  }
+
+  function coerceQueryList(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+    return value.filter((entry): entry is string => typeof entry === "string");
+  }
+
+  function coerceFilterPresets(value: unknown): FilterPreset[] {
+    if (!Array.isArray(value)) return [];
+
+    return value.flatMap((entry) => {
+      if (!entry || typeof entry !== "object") return [];
+
+      const candidate = entry as Record<string, unknown>;
+      if (typeof candidate.name !== "string") return [];
+
+      const filters =
+        candidate.filters && typeof candidate.filters === "object"
+          ? (candidate.filters as FilterState)
+          : {};
+
+      return [{ name: candidate.name, filters }];
+    });
+  }
+
   onMount(() => {
     if (typeof window === "undefined") return;
 
-    const storedQueries = localStorage.getItem(QUERY_KEY);
-    if (storedQueries) {
-      recentQueries = JSON.parse(storedQueries);
-    }
-
-    const storedFilters = localStorage.getItem(FILTER_KEY);
-    if (storedFilters) {
-      savedFilterPresets = JSON.parse(storedFilters);
-    }
+    recentQueries = coerceQueryList(parseStoredJson(localStorage.getItem(QUERY_KEY)));
+    savedFilterPresets = coerceFilterPresets(
+      parseStoredJson(localStorage.getItem(FILTER_KEY)),
+    );
 
     document.addEventListener("click", handleClickOutside);
   });

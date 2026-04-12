@@ -19,6 +19,22 @@ type RawS3ObjectModel = {
   tags: string[];
 };
 
+type RawS3FolderFileModel = {
+  key: string;
+  size: number;
+  last_modified?: string;
+  storage_class?: string;
+  lastModified?: string;
+  storageClass?: string;
+};
+
+type RawS3FolderChildrenResponse = {
+  path: string;
+  breadcrumbs: S3FolderChildrenResponse["breadcrumbs"];
+  children: S3FolderChildrenResponse["children"];
+  files?: RawS3FolderFileModel[];
+};
+
 // helper to add parameters to queries
 function addQueryParam(queries: URLSearchParams, key: string, value: unknown) {
   if (value === undefined || value === null) return;
@@ -28,6 +44,15 @@ function addQueryParam(queries: URLSearchParams, key: string, value: unknown) {
   } else {
     queries.set(key, String(value));
   }
+}
+
+function normalizeSortDirection(
+  direction: unknown,
+): "asc" | "desc" | undefined {
+  if (direction === undefined || direction === null || direction === "") {
+    return undefined;
+  }
+  return direction === "asc" || direction === "desc" ? direction : "asc";
 }
 
 export async function getRefreshStatus(s3Uri: string): Promise<MeilisearchRefreshStatus> {
@@ -44,6 +69,7 @@ export async function getRefreshStatus(s3Uri: string): Promise<MeilisearchRefres
 export async function searchS3(params: S3SearchRequest): Promise<S3ObjectModel[]> {
   const queries = new URLSearchParams();
   queries.set("s3_uri", params.s3Uri);
+  const normalizedSortDirection = normalizeSortDirection(params.sortDirection);
 
   addQueryParam(queries, "contains", params.contains);
   addQueryParam(queries, "limit", params.limit);
@@ -54,7 +80,7 @@ export async function searchS3(params: S3SearchRequest): Promise<S3ObjectModel[]
   addQueryParam(queries, "modified_after", params.modifiedAfter);
   addQueryParam(queries, "modified_before", params.modifiedBefore);
   addQueryParam(queries, "sort_by", params.sortBy);
-  addQueryParam(queries, "sort_direction", params.sortDirection);
+  addQueryParam(queries, "sort_direction", normalizedSortDirection);
 
   const res = await fetch(`/api/s3/search?${queries.toString()}`);
   if (!res.ok) {
@@ -91,12 +117,13 @@ export async function searchS3Folders(params: S3FolderSearchRequest): Promise<S3
 export async function searchS3FolderChildren(params: S3FolderChildrenRequest): Promise<S3FolderChildrenResponse> {
   const queries = new URLSearchParams();
   queries.set("s3_uri", params.s3Uri);
+  const normalizedSortDirection = normalizeSortDirection(params.sortDirection);
 
   addQueryParam(queries, "path", params.path);
   addQueryParam(queries, "contains", params.contains);
   addQueryParam(queries, "limit", params.limit);
   addQueryParam(queries, "sort_by", params.sortBy);
-  addQueryParam(queries, "sort_direction", params.sortDirection);
+  addQueryParam(queries, "sort_direction", normalizedSortDirection);
 
   const res = await fetch(`/api/s3/folders/children?${queries.toString()}`);
   if (!res.ok) {
@@ -104,7 +131,7 @@ export async function searchS3FolderChildren(params: S3FolderChildrenRequest): P
     throw new Error(`S3 folder children failed: ${res.status} ${errorText}`);
   }
 
-  const data = await res.json();
+  const data = (await res.json()) as RawS3FolderChildrenResponse;
   return {
     path: data.path,
     breadcrumbs: data.breadcrumbs,
