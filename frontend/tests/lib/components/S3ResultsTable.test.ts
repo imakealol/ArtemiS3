@@ -1,8 +1,10 @@
 import { render, screen, waitFor } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import S3ResultsTable from "../../../src/lib/components/S3ResultsTable.svelte";
 import type { S3ObjectModel } from "../../../src/lib/schemas/s3";
+
+const fetchMock = vi.fn();
 
 function makeItems(total: number): S3ObjectModel[] {
   return Array.from({ length: total }, (_, index) => ({
@@ -15,6 +17,15 @@ function makeItems(total: number): S3ObjectModel[] {
 }
 
 describe("S3ResultsTable", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockReset();
+  });
+
+  afterAll(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("test_pagination_controls_enable_and_disable_at_bounds", async () => {
     const user = userEvent.setup();
 
@@ -117,5 +128,101 @@ describe("S3ResultsTable", () => {
     });
 
     expect(screen.getByText("existing, new-tag")).toBeInTheDocument();
+  });
+
+  it("test_geojson_preview_renders_map_preview_using_existing_preview_button", async () => {
+    const user = userEvent.setup();
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ preview_url: "https://example.com/sample.geojson" }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            type: "FeatureCollection",
+            features: [
+              {
+                type: "Feature",
+                geometry: { type: "Point", coordinates: [10, 10] },
+                properties: { name: "point-a" },
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
+
+    render(S3ResultsTable, {
+      s3Uri: "s3://bucket",
+      items: [
+        {
+          key: "folder/footprint.geojson",
+          size: 1024,
+          lastModified: "2025-01-01T00:00:00Z",
+          storageClass: "STANDARD",
+          tags: [],
+        },
+      ],
+      searchedYet: true,
+      onDownload: vi.fn(),
+      onSort: vi.fn(),
+      editTags: vi.fn().mockResolvedValue(undefined),
+      sortBy: undefined,
+      sortDirection: "asc",
+    });
+
+    await user.click(screen.getByTitle("Preview document"));
+
+    expect(await screen.findByText(/Map preview: footprint.geojson/i)).toBeInTheDocument();
+    expect(await screen.findByText(/1 feature/i)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("test_geojson_preview_shows_size_limit_message_for_large_files", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ preview_url: "https://example.com/huge.geojson" }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    render(S3ResultsTable, {
+      s3Uri: "s3://bucket",
+      items: [
+        {
+          key: "folder/huge.geojson",
+          size: 16 * 1024 * 1024,
+          lastModified: "2025-01-01T00:00:00Z",
+          storageClass: "STANDARD",
+          tags: [],
+        },
+      ],
+      searchedYet: true,
+      onDownload: vi.fn(),
+      onSort: vi.fn(),
+      editTags: vi.fn().mockResolvedValue(undefined),
+      sortBy: undefined,
+      sortDirection: "asc",
+    });
+
+    await user.click(screen.getByTitle("Preview document"));
+
+    expect(
+      await screen.findByText(/exceeds the 15 MB preview limit/i),
+    ).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

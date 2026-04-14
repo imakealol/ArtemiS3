@@ -32,7 +32,8 @@ app.include_router(s3_router)
 REFRESH_INTERVAL_SECONDS = int(os.getenv("REFRESH_INTERVAL_SECONDS", "3600"))
 REFRESH_BUCKETS = os.getenv(
     "REFRESH_BUCKETS",
-    # ,s3://asc-pds-services,s3://asc-astropedia"
+    # "s3://asc-astropedia"
+    # "s3://asc-pds-services,"
     "s3://asc-pds-services/pigpen,s3://asc-astropedia/Mars"
 )
 
@@ -77,6 +78,7 @@ def test() -> dict:
     health = meili_client.health()
     return {"status": health}
 
+
 @app.get("/api/postgres/test")
 def test() -> dict:
     with psycopg.connect(postgres_url) as conn:
@@ -98,21 +100,23 @@ def add_mime(data: MimeRecord):
         with psycopg.connect(postgres_url) as conn:
             with conn.cursor() as cur:
                 cur.execute("""INSERT INTO custom_mime_types (extension, mime_type) VALUES (%s, %s) 
-                                ON CONFLICT (extension) DO UPDATE SET mime_type = EXCLUDED.mime_type""", 
-                                (data.extension, data.mime_type,))
+                                ON CONFLICT (extension) DO UPDATE SET mime_type = EXCLUDED.mime_type""",
+                            (data.extension, data.mime_type,))
     except Exception:
-       raise HTTPException(
+        raise HTTPException(
             status_code=500, detail="Error encountered while storing mime type to database."
-       )
-    
+        )
+
+
 @app.delete("/api/postgres/mime/{extension}")
 def delete_mime(extension: str):
     postgres_url = os.getenv("DATABASE_URL")
     try:
         with psycopg.connect(postgres_url) as conn:
             with conn.cursor() as cur:
-                cur.execute("""DELETE FROM custom_mime_types WHERE extension=%s""", (extension,))
+                cur.execute(
+                    """DELETE FROM custom_mime_types WHERE extension=%s""", (extension,))
     except Exception:
         raise HTTPException(
             status_code=500, detail="Error encountered while deleting mime type from database."
-       )
+        )

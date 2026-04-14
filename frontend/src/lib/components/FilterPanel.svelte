@@ -37,7 +37,16 @@
     { label: "MB", value: 1024 ** 2 },
     { label: "GB", value: 1024 ** 3 },
   ];
-  const defaultFileTypes = ["zip", "pdf", "png", "jpg", "txt"];
+  const defaultFileTypes = [
+    "zip",
+    "pdf",
+    "png",
+    "jpg",
+    "txt",
+    "geojson",
+    "kml",
+    "kmz",
+  ];
   let customType = "";
 
   let showSavedFilters = false;

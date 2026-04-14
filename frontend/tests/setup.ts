@@ -1,6 +1,20 @@
 import { cleanup } from "@testing-library/svelte";
 import "@testing-library/jest-dom/vitest";
-import { afterEach } from "vitest";
+import { afterEach, vi } from "vitest";
+
+type LeafletMockConfig = {
+  mapReturnsNull: boolean;
+  boundsValid: boolean;
+};
+
+declare global {
+  var __leafletMockConfig: LeafletMockConfig | undefined;
+}
+
+const createLeafletMockConfig = (): LeafletMockConfig => ({
+  mapReturnsNull: false,
+  boundsValid: true,
+});
 
 function createMemoryStorage(): Storage {
   const values = new Map<string, string>();
@@ -59,7 +73,46 @@ function ensureStorage(name: "localStorage" | "sessionStorage") {
 
 ensureStorage("localStorage");
 ensureStorage("sessionStorage");
+globalThis.__leafletMockConfig = createLeafletMockConfig();
+
+vi.mock("leaflet", () => {
+  const getConfig = () => globalThis.__leafletMockConfig ?? createLeafletMockConfig();
+
+  const createBounds = () => {
+    const config = getConfig();
+    const bounds = {
+      isValid: () => config.boundsValid,
+      pad: () => bounds,
+    };
+    return bounds;
+  };
+
+  return {
+    default: {
+      map: () => {
+        const config = getConfig();
+        if (config.mapReturnsNull) return null;
+        return {
+          setView: () => undefined,
+          fitBounds: () => undefined,
+          invalidateSize: () => undefined,
+          removeLayer: () => undefined,
+          remove: () => undefined,
+        };
+      },
+      tileLayer: () => ({
+        addTo: () => undefined,
+      }),
+      geoJSON: () => ({
+        addTo: () => undefined,
+        getBounds: () => createBounds(),
+      }),
+      circleMarker: () => ({}),
+    },
+  };
+});
 
 afterEach(() => {
+  globalThis.__leafletMockConfig = createLeafletMockConfig();
   cleanup();
 });

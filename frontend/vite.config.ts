@@ -19,7 +19,11 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       all: true,
-      include: ["src/lib/api/**/*.ts", "src/lib/components/**/*.svelte"],
+      include: [
+        "src/lib/api/**/*.ts",
+        "src/lib/components/**/*.svelte",
+        "src/lib/utils/**/*.ts",
+      ],
       reporter: ["text", "html", "json-summary", "lcov"],
       thresholds: {
         perFile: true,

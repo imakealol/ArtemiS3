@@ -188,4 +188,113 @@ describe("S3FolderExplorer", () => {
       expect(screen.queryByText("Preview: missions/sample.png")).not.toBeInTheDocument();
     });
   });
+
+  it("test_geojson_preview_renders_map_preview_branch", async () => {
+    const user = userEvent.setup();
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ preview_url: "https://example.com/missions.geojson" }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            type: "FeatureCollection",
+            features: [
+              {
+                type: "Feature",
+                geometry: { type: "Point", coordinates: [10, 11] },
+                properties: {},
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
+
+    render(S3FolderExplorer, {
+      searchedYet: true,
+      loading: false,
+      s3Uri: "s3://bucket",
+      suggestions: [{ path: "missions", name: "missions", depth: 1, matched_count: 1 }],
+      children: [],
+      files: [
+        {
+          key: "missions/footprint.geojson",
+          size: 1024,
+          lastModified: "2025-01-01T00:00:00Z",
+          storageClass: "STANDARD",
+          tags: [],
+        },
+      ],
+      breadcrumbs: [],
+      activePath: "missions",
+      sortBy: undefined,
+      sortDirection: "asc",
+      onOpenFolder: vi.fn(),
+      onOpenBreadcrumb: vi.fn(),
+      onNavigateUp: vi.fn(),
+      onSort: vi.fn(),
+      onDownload: vi.fn(),
+    });
+
+    await user.click(screen.getByTitle("Preview"));
+
+    expect(await screen.findByText(/Map preview: footprint.geojson/i)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("test_geojson_preview_shows_size_limit_error_for_large_file", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ preview_url: "https://example.com/huge.geojson" }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    render(S3FolderExplorer, {
+      searchedYet: true,
+      loading: false,
+      s3Uri: "s3://bucket",
+      suggestions: [{ path: "missions", name: "missions", depth: 1, matched_count: 1 }],
+      children: [],
+      files: [
+        {
+          key: "missions/huge.geojson",
+          size: 16 * 1024 * 1024,
+          lastModified: "2025-01-01T00:00:00Z",
+          storageClass: "STANDARD",
+          tags: [],
+        },
+      ],
+      breadcrumbs: [],
+      activePath: "missions",
+      sortBy: undefined,
+      sortDirection: "asc",
+      onOpenFolder: vi.fn(),
+      onOpenBreadcrumb: vi.fn(),
+      onNavigateUp: vi.fn(),
+      onSort: vi.fn(),
+      onDownload: vi.fn(),
+    });
+
+    await user.click(screen.getByTitle("Preview"));
+
+    expect(
+      await screen.findByText(/exceeds the 15 MB preview limit/i),
+    ).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

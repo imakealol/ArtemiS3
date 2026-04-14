@@ -13,6 +13,8 @@
   } from "@lucide/svelte";
   import type { S3ObjectModel } from "../schemas/s3";
   import EditTagsModal from "./EditTagsModal.svelte";
+  import S3MapPreview from "./S3MapPreview.svelte";
+  import { isGeospatialPreviewableKey } from "../utils/geospatialPreview";
 
   export let s3Uri = "";
   export let items: S3ObjectModel[] = [];
@@ -23,7 +25,7 @@
   export let sortBy: "Key" | "Size" | "LastModified" | undefined;
   export let sortDirection: "asc" | "desc";
 
-  const PREVIEWABLE_EXTENSIONS = [
+  const STANDARD_PREVIEWABLE_EXTENSIONS = [
     ".pdf",
     ".png",
     ".jpg",
@@ -105,7 +107,8 @@
 
   function canPreview(key: string): boolean {
     const lowerKey = key.toLowerCase();
-    return PREVIEWABLE_EXTENSIONS.some((ext) => lowerKey.endsWith(ext));
+    if (isGeospatialPreviewableKey(lowerKey)) return true;
+    return STANDARD_PREVIEWABLE_EXTENSIONS.some((ext) => lowerKey.endsWith(ext));
   }
 
   function formatDate(date: string): string {
@@ -277,7 +280,13 @@
                         Failed to load preview: {previewError}
                       </p>
                     {:else if previewUrl}
-                      {#if obj.key.toLowerCase().endsWith(".pdf")}
+                      {#if isGeospatialPreviewableKey(obj.key)}
+                        <S3MapPreview
+                          fileKey={obj.key}
+                          fileSize={obj.size}
+                          {previewUrl}
+                        />
+                      {:else if obj.key.toLowerCase().endsWith(".pdf")}
                         <iframe
                           src={previewUrl}
                           title="PDF Preview"
