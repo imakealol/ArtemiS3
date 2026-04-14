@@ -14,3 +14,5 @@ lerna-debug.log*
 dist
 dist-ssr
 *.local
+coverage
+test-results
