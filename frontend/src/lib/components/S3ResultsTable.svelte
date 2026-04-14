@@ -52,12 +52,16 @@
   $: maxPage = Math.max(Math.ceil(items.length / PAGE_SIZE) - 1, 0);
   $: pageStart = page * PAGE_SIZE;
   $: pageEnd = Math.min(page * PAGE_SIZE + PAGE_SIZE, items.length);
-  $: pagedItems = items.slice(pageStart, pageStart + PAGE_SIZE);
-  $: checkMaxPage();
+  $: pagedItems = items.slice(pageStart, pageEnd);
+  $: checkMaxPage(maxPage);
 
-  function checkMaxPage() {
+  function checkMaxPage(maxPage: number) {
     if (page > maxPage) {
       page = maxPage;
+      pagedItems = items.slice(
+        page * PAGE_SIZE,
+        Math.min(page * PAGE_SIZE + PAGE_SIZE, items.length),
+      );
     }
   }
 
