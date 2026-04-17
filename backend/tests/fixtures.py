@@ -1,7 +1,9 @@
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 import pytest
 import app.s3.index_refresh as index_module
+import app.s3.refresh_status as refresh_module
+import io
+from unittest.mock import MagicMock
 
 
 
@@ -28,111 +30,87 @@ def text_keywords():
 
 
 ######################
-# Function mocks
+# Mocks
 ######################
+
 
 @pytest.fixture(autouse=True)
 def env_vars(monkeypatch):
-    # Provide fake URLs so meilisearch.Client and psycopg.connect are constructed with deterministic args
-    monkeypatch.setenv("MEILISEARCH_URL", "http://fake-meili")
-    monkeypatch.setenv("DATABASE_URL", "postgresql://fake-db")
+    monkeypatch.setenv("MEILISEARCH_URL", "http://127.0.0.1:7700")
+    monkeypatch.setenv("DATABASE_URL", "postgres://user:pass@localhost/db")
     yield
 
+
 @pytest.fixture
-def fake_meili_client():
+def mock_s3_client():
+    s3 = MagicMock()
+    # paginator returns iterable pages
+    paginator = MagicMock()
+    s3.get_paginator.return_value = paginator
+
+    def paginate_side(Bucket, Prefix=""):
+        # simulate two pages
+        yield {"Contents": [{"Key": "a.txt", "Size": 10, "LastModified": __import__("datetime").datetime(2020,1,1), "StorageClass": "STANDARD"}]}
+        yield {"Contents": [{"Key": "dir/", "Size": 0, "LastModified": __import__("datetime").datetime(2020,1,2)}]}
+    paginator.paginate.side_effect = paginate_side
+
+    # head_object
+    s3.head_object.return_value = {"ContentType": "text/plain"}
+
+    # get_object for text
+    body = io.BytesIO(b"hello,world test_text")
+    s3.get_object.return_value = {"Body": body}
+
+    return s3
+
+
+@pytest.fixture
+def mock_meili_client():
     client = MagicMock()
-    # index(...).delete_document(...) should exist
-    index_mock = MagicMock()
-    client.index.return_value = index_mock
-    yield client
+    idx = MagicMock()
+    client.index.return_value = idx
+    client.create_index.return_value = {}
+    return client
+
 
 @pytest.fixture
-def fake_db_conn():
-    # Mock connection and cursor used with context managers
-    cursor = MagicMock()
+def mock_psycopg(monkeypatch):
     conn = MagicMock()
-    conn.cursor.return_value.__enter__.return_value = cursor
-    conn.__enter__.return_value = conn
-    # psycopg.connect(...) should return a context manager that yields conn
-    return conn, cursor
+    cur = MagicMock()
+    conn.cursor.return_value.__enter__.return_value = cur
+    # fetchall returns empty tags
+    cur.fetchall.return_value = []
+    # context manager for connect
+    monkeypatch.setattr(index_module, "psycopg", MagicMock(connect=MagicMock(return_value=conn)))
+    return conn, cur
+
 
 @pytest.fixture
-def mock_s3_success(monkeypatch):
-    """
-    Fixture that patches get_public_client() to return an object whose get_object
-    returns a response with Body.read() -> bytes of UTF-8 text.
-    """
-    class MockBody:
-        def __init__(self, data: bytes):
-            self._data = data
-        def read(self):
-            return self._data
+def status_mocks(monkeypatch):
+    mocks = {name: MagicMock() for name in ["start_refresh", "set_status", "increment_listed", "increment_processed", "finish_refresh", "fail_refresh"]}
+    for name, mock in mocks.items():
+        monkeypatch.setattr(index_module, name, mock)
+    return mocks
 
-    class MockS3Client:
-        def __init__(self, data: bytes):
-            self._data = data
-        def get_object(self, Bucket, Key):
-            return {"Body": MockBody(self._data)}
-
-    def _create(data: bytes):
-        client = MockS3Client(data)
-        monkeypatch.setattr(index_module, "get_public_client", lambda: client)
-        return client
-
-    return _create
 
 @pytest.fixture
-def mock_s3_failure(monkeypatch):
-    """
-    Fixture that patches get_public_client() to return a client whose get_object
-    raises an exception to trigger the except branch.
-    """
-    class FailingS3Client:
-        def get_object(self, Bucket, Key):
-            raise RuntimeError("S3 failure")
+def meili_helpers(monkeypatch):
+    # patch get_all_indexes, get_all_documents, get_doc_id, guess_mime_type and s3 utils
+    monkeypatch.setattr(index_module, "get_all_indexes", lambda: [])
+    monkeypatch.setattr(index_module, "get_all_documents", lambda bucket, prefix: [])
+    monkeypatch.setattr(index_module, "get_doc_id", lambda key: "hash-"+key)
+    monkeypatch.setattr(index_module, "guess_mime_type", lambda ext: "text/plain")
+    # s3 utils
+    monkeypatch.setattr(index_module, "normalize_s3_path", lambda k: k)
+    monkeypatch.setattr(index_module, "key_parent_path", lambda k: "parent")
+    monkeypatch.setattr(index_module, "key_filename", lambda k: "file.txt")
+    monkeypatch.setattr(index_module, "parent_ancestors", lambda p: ["parent"])
+    monkeypatch.setattr(index_module, "path_depth", lambda p: 1)
+    return True
 
-    def _apply():
-        monkeypatch.setattr(index_module, "get_public_client", lambda: FailingS3Client())
-        return FailingS3Client()
-
-    return _apply
-
-@pytest.fixture
-def spy_get_keywords(monkeypatch):
-    """
-    Fixture to replace get_keywords_from_key with a spy that records calls and returns a predictable list.
-    Provide a helper to set return value.
-    """
-    calls = []
-    return_value = []
-
-    def _set_return(val):
-        nonlocal return_value
-        return_value = val
-
-    def _spy(arg):
-        calls.append(arg)
-        # return a shallow copy to avoid mutation surprises
-        return list(return_value)
-
-    monkeypatch.setattr(index_module, "get_keywords_from_key", _spy)
-
-    return SimpleNamespace(set_return=_set_return, calls=calls)
-
-
-######################
-# Mock Classes
-######################
-
-class MockPage:
-    def __init__(self, text):
-        self._text = text
-    def get_text(self, mode):
-        assert mode == "text"
-        return self._text
-
-class MockPDF:
-    def __init__(self, pages):
-        self._pages = pages
-    def __iter__(self):
-        return iter(self._pages)
+@pytest.fixture(autouse=True)
+def clear_state():
+    # reset internal state before each test
+    refresh_module._status_by_uri.clear()
+    yield
+    refresh_module._status_by_uri.clear()
