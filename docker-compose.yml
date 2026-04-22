@@ -58,11 +58,27 @@ services:
     volumes:
       - ./backend:/app
     depends_on:
-      - meilisearch
-      - postgres
+      backend-test:
+        condition: service_completed_successfully
+      meilisearch:
+        condition: service_started
+      postgres:
+        condition: service_started
     environment:
       - MEILISEARCH_URL=http://meilisearch:7700
       - DATABASE_URL=postgresql://a3_admin:db_password@postgres:5432/artemis3
+    networks:
+      - net
+
+  backend-test:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    working_dir: /app
+    command: ["sh", "-c", "pytest --cov=app/s3 tests"]
+    restart: "no"
+    volumes:
+      - ./backend:/app
     networks:
       - net
 
