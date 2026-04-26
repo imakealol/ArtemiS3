@@ -1,0 +1,41 @@
+name: PR Test Suite
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-containers:
+    if: ${{ !github.event.pull_request.draft }}
+    name: ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - frontend-test
+          - backend-test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build and run ${{ matrix.service }}
+        run: docker compose up --build --abort-on-container-exit --exit-code-from ${{ matrix.service }} ${{ matrix.service }}
+
+      - name: Tear down containers
+        if: always()
+        run: docker compose down --volumes --remove-orphans
