@@ -1,4 +1,5 @@
 import os
+import mimetypes
 from typing import Iterator, Optional, Dict, Any, List
 from datetime import datetime
 from botocore.client import BaseClient
@@ -11,6 +12,7 @@ from app.s3.utils import (
     path_depth,
     build_subtree_filter
 )
+from app.meilisearch.util import guess_mime_type
 
 
 def _normalize_suffixes(suffixes: Optional[list[str]]) -> list[str]:
@@ -229,7 +231,25 @@ def search_from_meili(bucket: str,
         timestamp = modified_before.timestamp()
         filter_arr.append(f"LastModified<={timestamp}")
 
-    search_opts = {"filter": filter_arr}
+    if suffixes is not None:
+        content_types = {ctype
+                         for suffix in suffixes
+                         if suffix is not None
+                         for ctype in [guess_mime_type(suffix)]
+                         if ctype}
+        print(content_types)
+        if len(content_types) == 1:
+            only_type = next(iter(content_types))
+            filter_arr.append(f"ContentType='{only_type}'")
+        else:
+            types_list = ", ".join(
+                f"'{ctype}'" for ctype in sorted(content_types))
+            filter_arr.append(f"ContentType IN [{types_list}]")
+
+    search_opts = {
+        "filter": filter_arr,
+        "limit": limit,
+    }
 
     if sort_by:
         if sort_by in {"Key", "Size", "LastModified"}:
@@ -237,52 +257,23 @@ def search_from_meili(bucket: str,
                 f"{sort_by}:{sort_direction}"
             ]
 
+    documents = meili_client.index(bucket).search(
+        contains if contains is not None else "",
+        search_opts)
+
     objects = []
-    offset = 0
-    page_size = min(max(limit * 5, 50), 1000)
-    query = contains if contains is not None else ""
 
-    # Enforce exact suffix/key-substring semantics after ranked retrieval.
-    while len(objects) < limit:
-        current_opts = {
-            **search_opts,
-            "limit": page_size,
-            "offset": offset
-        }
-        documents = meili_client.index(bucket).search(query, current_opts)
-        hits = documents.get("hits", [])
-        if not hits:
-            break
+    for document in documents["hits"]:
+        last_modified_out = datetime.fromtimestamp(
+            int(document["LastModified"]))
 
-        for document in hits:
-            key = str(document.get("Key", ""))
-            if not key:
-                continue
-            if contains and contains not in key:
-                continue
-            if not _key_matches_suffixes(key, suffixes):
-                continue
-
-            last_modified_out = datetime.fromtimestamp(
-                int(document["LastModified"]))
-
-            objects.append({
-                "key": key,
-                "size": document["Size"],
-                "last_modified": last_modified_out,
-                "storage_class": document["StorageClass"],
-                "tags": document["Tags"]
-            })
-
-            if len(objects) >= limit:
-                break
-
-        offset += len(hits)
-        estimated_total = documents.get("estimatedTotalHits")
-        if len(hits) < page_size:
-            break
-        if isinstance(estimated_total, int) and offset >= estimated_total:
-            break
+        objects.append({
+            "key": document["Key"],
+            "size": document["Size"],
+            "last_modified": last_modified_out,
+            "storage_class": document["StorageClass"],
+            "tags": document["Tags"]
+        })
 
     return objects
 
