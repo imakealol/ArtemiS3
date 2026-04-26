@@ -11,3 +11,6 @@ CREATE TABLE custom_mime_types (
 
 INSERT INTO custom_mime_types (extension, mime_type) VALUES ('lbl', 'text/lbl');
 INSERT INTO custom_mime_types (extension, mime_type) VALUES ('lab', 'text/lab');
+INSERT INTO custom_mime_types (extension, mime_type) VALUES ('geojson', 'application/geo+json');
+INSERT INTO custom_mime_types (extension, mime_type) VALUES ('kmz', 'application/vnd.google-earth.kmz');
+INSERT INTO custom_mime_types (extension, mime_type) VALUES ('kml', 'application/vnd.google-earth.kml+xml');

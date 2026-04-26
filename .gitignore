@@ -17,3 +17,4 @@ dist-ssr
 coverage
 test-results
 backend/app.egg-info/*
+.coverage
