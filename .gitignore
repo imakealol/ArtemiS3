@@ -14,3 +14,7 @@ lerna-debug.log*
 dist
 dist-ssr
 *.local
+coverage
+test-results
+backend/app.egg-info/*
+.coverage

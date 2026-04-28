@@ -40,10 +40,20 @@
         : [...localTags, tagInput];
     tagInput = "";
   }
+
+  function portal(node: HTMLElement) {
+    document.body.appendChild(node);
+    return {
+      destroy() {
+        if (node.parentNode) node.parentNode.removeChild(node);
+      },
+    };
+  }
 </script>
 
 {#if editing}
   <div
+    use:portal
     class="fixed inset-0 z-40 flex h-screen w-screen items-center justify-center"
     role="dialog"
     aria-modal="true"
@@ -94,7 +104,8 @@
             bind:value={tagInput}
             placeholder="mars-rover-2020"
           />
-          <button type="submit" class="button whitespace-nowrap">Add Tag</button>
+          <button type="submit" class="button whitespace-nowrap">Add Tag</button
+          >
         </form>
         {#if localTags.length > 0}
           <div

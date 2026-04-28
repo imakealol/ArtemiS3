@@ -1,13 +1,9 @@
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
-import json
 import os
-import sys
-from pathlib import Path
-from typing import List, Dict, Optional, Any
+from typing import List, Optional
 import fitz
 import meilisearch
-import hashlib
 
 import psycopg
 from app.s3.refresh_status import (
@@ -25,15 +21,14 @@ from app.s3.utils import (
     key_filename,
     parent_ancestors,
     path_depth,
-    build_subtree_filter
 )
 from app.schemas.meili_models import MeiliDocumentModel
-from app.schemas.pg_models import TagRecord
+from app.meilisearch.util import get_all_documents, get_all_indexes, get_doc_id, guess_mime_type
 
 
 # List of supported text file types for full-text indexing
 TEXT_CONTENT_TYPES = ["text/plain", "text/css", "text/csv", "text/xml", "application/xml"
-                      "text/html", "text/markdown", "application/json"]
+                      "text/html", "text/markdown", "application/json", "text/lbl", "text/lab"]
 # Keyword parsing separation characters
 SEPARATION_CHARACTERS = ["/", ",", "_", "-", " ", ".", "\n",
                          ":", "\\", "(", ")", "[", "]", "=", ";", "—", "*", "\""]
@@ -50,67 +45,6 @@ INDEX_SETTINGS = {
 
 def config_index_settings(index_obj: meilisearch.Client) -> None:
     index_obj.update_settings(INDEX_SETTINGS)
-
-
-def get_current_files_from_mock(bucket_name: str) -> List[Dict]:
-
-    path = Path(bucket_name)
-    if not path.exists():
-        raise FileNotFoundError(f"Bucket '{bucket_name}' not found.")
-
-    with open(path, "r") as f:
-        data = json.load(f)
-
-    return data
-
-
-def refresh_search_index(bucket_name: str, cache_file: str = "index_cache.json"):
-    """
-    FR6 Prototype Demonstration
-
-    Usage
-    -----
-    >>> # Refresh bucket search index
-    >>> python index_refresh.py <NASA_Bucket_Name>
-    """
-
-    current_files = get_current_files_from_mock(bucket_name)
-
-    cache_path = Path(cache_file)
-    if cache_path.exists():
-        with open(cache_path, "r") as f:
-            previous_files = json.load(f)
-    else:
-        previous_files = []
-
-    prev_keys = {f["Key"] for f in previous_files}
-    curr_keys = {f["Key"] for f in current_files}
-
-    # Detect new and removed files
-    new_files = [f for f in current_files if f["Key"] not in prev_keys]
-    removed_files = [f for f in previous_files if f["Key"] not in curr_keys]
-
-    # Simulate updating the search index
-    if new_files:
-        print(f"Found {len(new_files)} new files:")
-        for f in new_files:
-            print(f"  + {f['Key']} (size: {f['Size']} bytes)")
-    else:
-        print("No new files found.")
-
-    print()
-
-    if removed_files:
-        print(f"{len(removed_files)} files removed:")
-        for f in removed_files:
-            print(f"  - {f['Key']} (size: {f['Size']} bytes)")
-    else:
-        print("No files removed.")
-
-    # Save the new state to disk
-    with open(cache_path, "w") as f:
-        json.dump(current_files, f, indent=2)
-
 
 def get_current_s3_objects(bucket_name: str, prefix: Optional[str] = None, s3_uri: Optional[str] = None):
     s3 = get_public_client()
@@ -215,6 +149,9 @@ def create_document(index: str, file, meili_client: meilisearch.Client, dbTags: 
     tags = dbTags[hashed_key][2] if hashed_key in dbTags else []
     keywords = []
 
+    if ctype == "binary/octet-stream":
+        ctype = guess_mime_type(norm_key.split(".")[-1])
+
     if ctype in TEXT_CONTENT_TYPES:
         keywords = get_keywords_from_text(index, raw_key)
     elif ctype == "application/pdf":
@@ -315,65 +252,3 @@ def get_keywords_from_pdf(index: str, key: str):
         print(f"Error extracting text content from {key}: {e}")
         keywords = get_keywords_from_key(key)
     return keywords[:500]
-
-
-# TODO: move meilisearch utility functions to their own file
-def get_doc_id(key: str):
-    hash_object = hashlib.sha256(key.encode())
-    hex_dig = hash_object.hexdigest()
-    return (f"{hex_dig}")
-
-
-def get_all_indexes():
-    meilisearch_url = os.getenv("MEILISEARCH_URL")
-    meili_client = meilisearch.Client(meilisearch_url)
-
-    limit = 20
-    offset = 0
-    total: int | None = None
-    indexObjs = []
-    while total is None or offset < total:
-        temp = meili_client.get_raw_indexes({"limit": limit, "offset": offset})
-        if total is None:
-            total = temp["total"]
-        offset += limit
-        indexObjs.extend(temp["results"])
-
-    return indexObjs
-
-
-def get_all_documents(index: str, prefix: Optional[str] = None):
-    meilisearch_url = os.getenv("MEILISEARCH_URL")
-    meili_client = meilisearch.Client(meilisearch_url)
-
-    limit = 100
-    offset = 0
-    total: int | None = None
-    documentObjs = []
-
-    while total is None or offset < total:
-        get_query = {
-            "fields": ["Key"],
-            "limit": limit,
-            "offset": offset
-        }
-        if prefix is not None and prefix != "":
-            norm_prefix = normalize_s3_path(prefix)
-            get_query["filter"] = build_subtree_filter(norm_prefix)
-
-        temp = meili_client.index(index).get_documents(get_query)
-        if total is None:
-            total = temp.total
-        offset += limit
-        documentObjs.extend(temp.results)
-
-    return documentObjs
-
-
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python index_refresh.py <bucket_name>")
-        sys.exit(1)
-
-    bucket_name = sys.argv[1]
-    refresh_search_index(bucket_name)

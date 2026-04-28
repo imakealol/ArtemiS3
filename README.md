@@ -50,6 +50,15 @@ docker compose up
 - Use Ctrl + C to stop the stack.
 - Run using `-d` option to run in detached mode (to use terminal while running).
 
+### Automatic Frontend Unit Tests On Startup
+
+`docker compose up` and `docker compose up --build` now run the one-shot `frontend-test` container automatically.
+
+- `frontend-test` executes Vitest + coverage and then exits (stopped state).
+- `frontend` waits until `frontend-test` completes successfully before starting.
+
+Coverage thresholds are enforced at **70% lines** and **70% branches** for frontend unit tests.
+
 ## 4. Access the Running Services
 
 | Service              | URL                        | Description               |

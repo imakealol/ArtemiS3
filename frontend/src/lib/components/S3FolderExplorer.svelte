@@ -11,8 +11,10 @@
     S3FolderModel,
     S3ObjectModel,
   } from "../schemas/s3";
+  import S3MapPreview from "./S3MapPreview.svelte";
+  import { isGeospatialPreviewableKey } from "../utils/geospatialPreview";
 
-  const PREVIEWABLE_EXTENSIONS = [
+  const STANDARD_PREVIEWABLE_EXTENSIONS = [
     ".pdf",
     ".png",
     ".jpg",
@@ -68,7 +70,8 @@
 
   function canPreview(key: string): boolean {
     const lowerKey = key.toLowerCase();
-    return PREVIEWABLE_EXTENSIONS.some((ext) => lowerKey.endsWith(ext));
+    if (isGeospatialPreviewableKey(lowerKey)) return true;
+    return STANDARD_PREVIEWABLE_EXTENSIONS.some((ext) => lowerKey.endsWith(ext));
   }
 
   function displayName(key: string): string {
@@ -368,7 +371,13 @@
                           {:else if previewError}
                             <p class="text-sm text-rose-300">{previewError}</p>
                           {:else if previewUrl}
-                            {#if previewKey?.toLowerCase().endsWith(".pdf")}
+                            {#if previewKey && isGeospatialPreviewableKey(previewKey)}
+                              <S3MapPreview
+                                fileKey={file.key}
+                                fileSize={file.size}
+                                {previewUrl}
+                              />
+                            {:else if previewKey?.toLowerCase().endsWith(".pdf")}
                               <iframe
                                 src={previewUrl}
                                 title="PDF preview"

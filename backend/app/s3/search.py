@@ -1,5 +1,5 @@
-import mimetypes
 import os
+import mimetypes
 from typing import Iterator, Optional, Dict, Any, List
 from datetime import datetime
 from botocore.client import BaseClient
@@ -12,6 +12,37 @@ from app.s3.utils import (
     path_depth,
     build_subtree_filter
 )
+from app.meilisearch.util import guess_mime_type
+
+
+def _normalize_suffixes(suffixes: Optional[list[str]]) -> list[str]:
+    """Normalize suffix list to lowercase extension tokens without leading dots."""
+    if not suffixes:
+        return []
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for raw in suffixes:
+        if raw is None:
+            continue
+        token = str(raw).strip().lower()
+        if token.startswith("."):
+            token = token[1:]
+        if not token or token in seen:
+            continue
+        seen.add(token)
+        normalized.append(token)
+    return normalized
+
+
+def _key_matches_suffixes(key: str, suffixes: Optional[list[str]]) -> bool:
+    """Match key against exact filename extension(s), case-insensitive."""
+    normalized = _normalize_suffixes(suffixes)
+    if not normalized:
+        return True
+
+    lower_key = key.lower()
+    return any(lower_key.endswith(f".{suffix}") for suffix in normalized)
 
 
 def _facet_map(result: Dict[str, Any], facet_name: str) -> Dict[str, int]:
@@ -139,7 +170,7 @@ def filter_s3_objects(key: str,
     if contains and contains not in key:
         return False
 
-    if suffixes and not any(key.endswith(suffix) for suffix in suffixes):
+    if not _key_matches_suffixes(key, suffixes):
         return False
 
     if min_size is not None and size < min_size:
@@ -204,9 +235,9 @@ def search_from_meili(bucket: str,
         content_types = {ctype
                          for suffix in suffixes
                          if suffix is not None
-                         for ctype in [mimetypes.guess_type(f"f.{suffix}", False)[0]]
+                         for ctype in [guess_mime_type(suffix)]
                          if ctype}
-
+        print(content_types)
         if len(content_types) == 1:
             only_type = next(iter(content_types))
             filter_arr.append(f"ContentType='{only_type}'")
@@ -231,17 +262,19 @@ def search_from_meili(bucket: str,
         search_opts)
 
     objects = []
+
     for document in documents["hits"]:
         last_modified_out = datetime.fromtimestamp(
             int(document["LastModified"]))
 
         objects.append({
-            "key": document["Key"], 
-            "size": document["Size"], 
-            "last_modified": last_modified_out, 
+            "key": document["Key"],
+            "size": document["Size"],
+            "last_modified": last_modified_out,
             "storage_class": document["StorageClass"],
             "tags": document["Tags"]
         })
+
     return objects
 
 

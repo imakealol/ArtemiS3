@@ -24,7 +24,7 @@ from app.s3.utils import (
 )
 from app.s3.refresh_status import get_status
 from app.schemas.meili_models import TagRequest
-from app.s3.index_refresh import get_doc_id
+from app.meilisearch.util import get_doc_id
 
 s3_router = APIRouter(prefix="/api/s3", tags=["s3"])
 
